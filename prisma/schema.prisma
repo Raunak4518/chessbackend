@@ -1,0 +1,122 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum GameStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  DRAW
+}
+
+enum GameWinner {
+  WHITE
+  BLACK
+  DRAW
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  rating        Int       @default(100)
+
+  // Glicko-1 Rating Pools
+  ratingBullet  Int       @default(100)
+  rdBullet      Float     @default(350.0)
+  lastActiveBullet DateTime?
+
+  ratingBlitz   Int       @default(100)
+  rdBlitz       Float     @default(350.0)
+  lastActiveBlitz DateTime?
+
+  ratingRapid   Int       @default(100)
+  rdRapid       Float     @default(350.0)
+  lastActiveRapid DateTime?
+
+  ratingDaily   Int       @default(100)
+  rdDaily       Float     @default(350.0)
+  lastActiveDaily DateTime?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  gamesAsWhite  Game[]    @relation("WhiteGames")
+  gamesAsBlack  Game[]    @relation("BlackGames")
+  lessonProgress LessonProgress[]
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Game {
+  id            String     @id @default(uuid())
+  whitePlayerId String
+  blackPlayerId String?
+  whitePlayer   User       @relation("WhiteGames", fields: [whitePlayerId], references: [id])
+  blackPlayer   User?      @relation("BlackGames", fields: [blackPlayerId], references: [id])
+  fen           String     @default("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+  pgn           String     @default("")
+  status        GameStatus @default(WAITING)
+  winner        GameWinner?
+  
+  // Time Control & Classification
+  timeControl   String     @default("10|0")
+  gameType      String     @default("RAPID")
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model LessonProgress {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId  String
+  completedAt DateTime @default(now())
+
+  @@unique([userId, lessonId])
+}

@@ -1,0 +1,22 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts", "mjs"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "setupFiles": ["<rootDir>/setup.js"],
+  "transform": {
+    "^.+\\.(t|j|mj)s$": [
+      "ts-jest",
+      {
+        "useESM": true,
+        "tsconfig": {
+          "module": "ESNext"
+        }
+      }
+    ]
+  },
+  "extensionsToTreatAsEsm": [".ts"],
+  "transformIgnorePatterns": [
+    "node_modules/(?!.*@thallesp/nestjs-better-auth)"
+  ]
+}

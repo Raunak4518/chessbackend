@@ -1,0 +1,75 @@
+import { betterAuth } from 'better-auth';
+import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { emailOTP } from 'better-auth/plugins';
+import { PrismaClient } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { MailService } from './mail/mail.service';
+
+export const getAuth = (
+  prisma: PrismaClient,
+  mailService: MailService,
+  configService: ConfigService,
+) => {
+  const googleClientId = configService.get<string>('GOOGLE_CLIENT_ID');
+  const googleClientSecret = configService.get<string>('GOOGLE_CLIENT_SECRET');
+  const gitHubClientId = configService.get<string>('GITHUB_CLIENT_ID');
+  const gitHubClientSecret = configService.get<string>('GITHUB_CLIENT_SECRET');
+
+  const socialProviders: Record<
+    string,
+    {
+      clientId: string;
+      clientSecret: string;
+      prompt?: string;
+      mapProfileToUser?: (profile: {
+        email?: string | null;
+        id: number | string;
+      }) => { email: string };
+    }
+  > = {};
+
+  if (googleClientId && googleClientSecret) {
+    socialProviders.google = {
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
+      prompt: 'select_account',
+    };
+  }
+
+  if (gitHubClientId && gitHubClientSecret) {
+    socialProviders.github = {
+      clientId: gitHubClientId,
+      clientSecret: gitHubClientSecret,
+      mapProfileToUser: (profile) => ({
+        email: profile.email ?? `${profile.id}@github.placeholder.local`,
+      }),
+    };
+  }
+
+  const auth = betterAuth({
+    database: prismaAdapter(prisma, {
+      provider: 'postgresql',
+    }),
+    baseURL: configService.get<string>(
+      'BETTER_AUTH_URL',
+      'http://localhost:4001',
+    ),
+    trustedOrigins: ['http://localhost:3000'],
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+    },
+    socialProviders,
+    plugins: [
+      emailOTP({
+        async sendVerificationOTP({ email, otp, type }) {
+          if (type === 'email-verification' || type === 'sign-in') {
+            await mailService.sendOtpEmail(email, otp);
+          }
+        },
+      }),
+    ],
+  });
+
+  return auth as unknown as ReturnType<typeof betterAuth>;
+};
