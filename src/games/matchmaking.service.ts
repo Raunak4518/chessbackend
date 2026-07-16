@@ -6,6 +6,7 @@ export interface QueueItem {
   timeControl: string;
   gameType: string;
   joinedAt: number;
+  tournamentId?: string;
 }
 
 export interface MatchResult {
@@ -14,6 +15,7 @@ export interface MatchResult {
   black: string;
   timeControl: string;
   gameType: string;
+  tournamentId?: string;
 }
 
 @Injectable()
@@ -38,7 +40,7 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
     this.matchCallback = callback;
   }
 
-  joinQueue(socketId: string, rating: number, timeControl: string, gameType: string) {
+  joinQueue(socketId: string, rating: number, timeControl: string, gameType: string, tournamentId?: string) {
     this.leaveQueue(socketId);
     this.queue.push({
       socketId,
@@ -46,6 +48,7 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
       timeControl,
       gameType,
       joinedAt: Date.now(),
+      tournamentId,
     });
   }
 
@@ -71,6 +74,9 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
 
         // Must be in the same gameType pool
         if (playerA.gameType !== playerB.gameType) continue;
+        
+        // Must be in the same tournament (or both outside)
+        if (playerA.tournamentId !== playerB.tournamentId) continue;
 
         if (this.areCompatible(playerA, playerB)) {
           matchedIndices.add(i);
@@ -85,6 +91,7 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
             black: assignWhite ? playerB.socketId : playerA.socketId,
             timeControl: playerA.timeControl,
             gameType: playerA.gameType,
+            tournamentId: playerA.tournamentId,
           };
 
           if (this.matchCallback) {

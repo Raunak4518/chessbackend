@@ -17,6 +17,7 @@ import { UndoMoveDto } from './dtos/undo-move.dto';
 import { ResetGameDto } from './dtos/reset-game.dto';
 import { JoinQueueDto } from './dtos/join-queue.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { TournamentsService } from '../tournaments/tournaments.service';
 import { Chess } from 'chess.js';
 import {
   decayRD,
@@ -81,7 +82,48 @@ async function updateRatingsOnNest(
           rating: updateB.rating,
         },
       }),
+      prisma.ratingHistory.create({
+        data: {
+          userId: whiteId,
+          rating: updateA.rating,
+          gameType,
+        }
+      }),
+      prisma.ratingHistory.create({
+        data: {
+          userId: blackId,
+          rating: updateB.rating,
+          gameType,
+        }
+      })
     ]);
+
+    // Simple achievement check
+    const checkAchievements = async (userId: string, isWinner: boolean, oppRating: number, newRating: number) => {
+      const existing = await prisma.userAchievement.findMany({ where: { userId } });
+      const unlocked = new Set(existing.map(a => a.achievement));
+      
+      const toUnlock: string[] = [];
+      if (isWinner && !unlocked.has('FIRST_WIN')) toUnlock.push('FIRST_WIN');
+      if (isWinner && oppRating > 1500 && !unlocked.has('BEAT_1500')) toUnlock.push('BEAT_1500');
+      if (newRating > 1500 && !unlocked.has('REACHED_1500')) toUnlock.push('REACHED_1500');
+
+      if (toUnlock.length > 0) {
+        await prisma.userAchievement.createMany({
+          data: toUnlock.map(a => ({ userId, achievement: a })),
+          skipDuplicates: true,
+        });
+      }
+    };
+
+    if (outcome === 1.0) {
+      await checkAchievements(whiteId, true, rB, updateA.rating);
+      await checkAchievements(blackId, false, rA, updateB.rating);
+    } else if (outcome === 0.0) {
+      await checkAchievements(whiteId, false, rB, updateA.rating);
+      await checkAchievements(blackId, true, rA, updateB.rating);
+    }
+
   } catch (err) {
     console.error('Failed to update ratings in NestJS transaction:', err);
   }
@@ -102,6 +144,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly gamesService: GamesService,
     private readonly matchmakingService: MatchmakingService,
     private readonly prisma: PrismaService,
+    private readonly tournamentsService: TournamentsService,
   ) {
     this.matchmakingService.registerMatchCallback((match) => {
       this.handleMatchFound(match);
@@ -164,6 +207,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       match.white,
       match.timeControl,
       match.gameType,
+      match.tournamentId,
     );
     const room = this.gamesService.joinRoom(match.roomName, match.black);
 
@@ -218,6 +262,27 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       userRating,
       parsed.timeControl,
       parsed.gameType,
+    );
+    client.emit('queueJoined');
+  }
+
+  @SubscribeMessage('joinTournamentQueue')
+  handleJoinTournamentQueue(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { tournamentId: string; timeControl: string },
+  ) {
+    const tc = data.timeControl ?? '10|0';
+    const parsed = parseTimeControl(tc);
+    const fields = getPlayerRatingField(parsed.gameType);
+
+    const userRating = client.data.user ? (client.data.user[fields.rating] ?? 1200) : 1200;
+
+    this.matchmakingService.joinQueue(
+      client.id,
+      userRating,
+      parsed.timeControl,
+      parsed.gameType,
+      data.tournamentId,
     );
     client.emit('queueJoined');
   }
@@ -310,6 +375,16 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
               outcome,
               movesCount,
             );
+
+            if (room.tournamentId) {
+              const gameWinner = outcome === 1.0 ? 'WHITE' : outcome === 0.0 ? 'BLACK' : 'DRAW';
+              await this.tournamentsService.recordGameResult(
+                room.tournamentId,
+                whiteUserId,
+                blackUserId,
+                gameWinner as any
+              );
+            }
           }
         }
       } catch (err) {
@@ -374,9 +449,46 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
           outcome,
           movesCount,
         );
+
+        if (room.tournamentId) {
+          const gameWinner = outcome === 1.0 ? 'WHITE' : outcome === 0.0 ? 'BLACK' : 'DRAW';
+          await this.tournamentsService.recordGameResult(
+            room.tournamentId,
+            whiteUserId,
+            blackUserId,
+            gameWinner as any
+          );
+        }
       }
     } catch (err) {
       // Ignored
     }
+  }
+
+  @SubscribeMessage('spectateGame')
+  handleSpectateGame(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { room: string },
+  ) {
+    const roomName = data.room;
+    client.join(roomName);
+    
+    const room = this.gamesService.getRoom(roomName);
+    if (room) {
+      client.emit('spectateStart', { fen: room.fen, timeControl: room.timeControl, gameType: room.gameType });
+    }
+  }
+
+  @SubscribeMessage('sendGameMessage')
+  handleSendGameMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { room: string, message: string },
+  ) {
+    const username = client.data?.user?.name || 'Guest';
+    this.server.to(data.room).emit('gameMessage', {
+      sender: username,
+      message: data.message,
+      timestamp: new Date().toISOString()
+    });
   }
 }

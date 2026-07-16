@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
@@ -12,6 +13,12 @@ import { MailModule } from './mail/mail.module';
 import { PrismaService } from './prisma/prisma.service';
 import { MailService } from './mail/mail.service';
 import { getAuth } from './auth';
+import { DailyGamesModule } from './daily-games/daily-games.module';
+import { TournamentsModule } from './tournaments/tournaments.module';
+import { AnalysisModule } from './analysis/analysis.module';
+import { SocialModule } from './social/social.module';
+import { PuzzlesModule } from './puzzles/puzzles.module';
+import { StudiesModule } from './studies/studies.module';
 
 @Module({
   imports: [
@@ -46,6 +53,13 @@ import { getAuth } from './auth';
     PrismaModule,
     UsersModule,
     AcademyModule,
+    DailyGamesModule,
+    ScheduleModule.forRoot(),
+    TournamentsModule,
+    AnalysisModule,
+    SocialModule,
+    PuzzlesModule,
+    StudiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

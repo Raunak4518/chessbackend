@@ -7,6 +7,7 @@ export interface RoomState {
   blackPlayerId: string;
   timeControl: string;
   gameType: string;
+  tournamentId?: string;
 }
 
 @Injectable()
@@ -18,7 +19,7 @@ export class GamesService {
     return this.rooms.get(roomName);
   }
 
-  createRoom(roomName: string, socketId: string, timeControl: string = '10|0', gameType: string = 'RAPID'): RoomState {
+  createRoom(roomName: string, socketId: string, timeControl: string = '10|0', gameType: string = 'RAPID', tournamentId?: string): RoomState {
     const room: RoomState = {
       players: [socketId],
       fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -26,6 +27,7 @@ export class GamesService {
       blackPlayerId: '',
       timeControl,
       gameType,
+      tournamentId,
     };
     this.rooms.set(roomName, room);
     this.socketToRoom.set(socketId, roomName);
