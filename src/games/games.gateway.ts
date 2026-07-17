@@ -19,6 +19,7 @@ import { JoinQueueDto } from './dtos/join-queue.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TournamentsService } from '../tournaments/tournaments.service';
 import { QuestsService } from '../quests/quests.service';
+import { FactionsService } from '../factions/factions.service';
 import type { AuthenticatedSocket } from '../types';
 import { Chess } from 'chess.js';
 import {
@@ -168,6 +169,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly prisma: PrismaService,
     private readonly tournamentsService: TournamentsService,
     private readonly questsService: QuestsService,
+    private readonly factionsService: FactionsService,
   ) {
     this.matchmakingService.registerMatchCallback((match) => {
       this.handleMatchFound(match);
@@ -436,15 +438,11 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
             // Quests Integration
             if (outcome === 1.0) {
-              await this.questsService.incrementQuestProgress(
-                whiteUserId,
-                'WIN_GAMES',
-              );
+              await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
+              await this.factionsService.incrementFactionScoreForUser(whiteUserId, 15).catch(() => {});
             } else if (outcome === 0.0) {
-              await this.questsService.incrementQuestProgress(
-                blackUserId,
-                'WIN_GAMES',
-              );
+              await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
+              await this.factionsService.incrementFactionScoreForUser(blackUserId, 15).catch(() => {});
             }
           }
         }
@@ -533,15 +531,11 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Quests Integration
         if (outcome === 1.0) {
-          await this.questsService.incrementQuestProgress(
-            whiteUserId,
-            'WIN_GAMES',
-          );
+          await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
+          await this.factionsService.incrementFactionScoreForUser(whiteUserId, 15).catch(() => {});
         } else if (outcome === 0.0) {
-          await this.questsService.incrementQuestProgress(
-            blackUserId,
-            'WIN_GAMES',
-          );
+          await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
+          await this.factionsService.incrementFactionScoreForUser(blackUserId, 15).catch(() => {});
         }
       }
     } catch {

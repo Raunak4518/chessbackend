@@ -20,6 +20,7 @@ import { SocialModule } from './social/social.module';
 import { PuzzlesModule } from './puzzles/puzzles.module';
 import { StudiesModule } from './studies/studies.module';
 import { QuestsModule } from './quests/quests.module';
+import { FactionsModule } from './factions/factions.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { QuestsModule } from './quests/quests.module';
     PuzzlesModule,
     StudiesModule,
     QuestsModule,
+    FactionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -10,6 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuestsService } from '../quests/quests.service';
+import { FactionsService } from '../factions/factions.service';
 import type { AuthenticatedSocket } from '../types';
 
 interface BattlePlayer {
@@ -44,6 +45,7 @@ export class PuzzleBattleGateway
   constructor(
     private readonly prisma: PrismaService,
     private readonly questsService: QuestsService,
+    private readonly factionsService: FactionsService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -217,12 +219,9 @@ export class PuzzleBattleGateway
           )?.id;
 
           if (winnerId) {
-            this.questsService
-              .incrementQuestProgress(winnerId, 'WIN_PUZZLE_BATTLE')
-              .catch(() => {});
-            this.questsService
-              .incrementQuestProgress(winnerId, 'PLAY_BATTLES')
-              .catch(() => {});
+            this.questsService.incrementQuestProgress(winnerId, 'WIN_PUZZLE_BATTLE').catch(() => {});
+            this.questsService.incrementQuestProgress(winnerId, 'PLAY_BATTLES').catch(() => {});
+            this.factionsService.incrementFactionScoreForUser(winnerId, 25).catch(() => {});
           }
           if (loserId) {
             this.questsService
