@@ -14,7 +14,10 @@ export class RedisIoAdapter extends IoAdapter {
   }
 
   createIOServer(port: number, options?: ServerOptions): any {
-    const server = super.createIOServer(port, options);
+    const server = super.createIOServer(port, {
+      ...options,
+      maxHttpBufferSize: 1e4, // 10KB
+    } as any);
     server.adapter(this.adapterConstructor);
     return server;
   }

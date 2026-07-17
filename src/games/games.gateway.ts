@@ -232,6 +232,16 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   private handleMatchFound(match: MatchResult) {
+    const whiteSocket = this.server.sockets.sockets.get(match.white);
+    const blackSocket = this.server.sockets.sockets.get(match.black);
+
+    // Security & Race Condition Check: Ensure both players are still connected
+    if (!whiteSocket || !blackSocket) {
+      if (whiteSocket) this.matchmakingService.joinQueue(match.white, 1200, match.timeControl, match.gameType, match.tournamentId); // Fallback rating
+      if (blackSocket) this.matchmakingService.joinQueue(match.black, 1200, match.timeControl, match.gameType, match.tournamentId);
+      return;
+    }
+
     this.gamesService.createRoom(
       match.roomName,
       match.white,
@@ -242,8 +252,6 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const room = this.gamesService.joinRoom(match.roomName, match.black);
 
     if (room) {
-      const whiteSocket = this.server.sockets.sockets.get(match.white);
-      const blackSocket = this.server.sockets.sockets.get(match.black);
 
       if (whiteSocket) {
         void whiteSocket.join(match.roomName);
@@ -384,6 +392,10 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const room = this.gamesService.getRoom(data.room);
     if (!room) return;
 
+    if (client.id !== room.whitePlayerId && client.id !== room.blackPlayerId) {
+      return;
+    }
+
     const updated = this.gamesService.updateFen(data.room, data.fen);
     if (updated) {
       client.to(data.room).emit('opponentMove', {
@@ -495,6 +507,10 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const room = this.gamesService.getRoom(data.room);
     if (!room) return;
+
+    if (client.id !== room.whitePlayerId && client.id !== room.blackPlayerId) {
+      return;
+    }
 
     client.to(data.room).emit('opponentResigned');
 

@@ -10,13 +10,21 @@ import {
 import { AnalysisService } from './analysis.service';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import type { AuthenticatedRequest } from '../types';
+import { IsString, MaxLength, IsNotEmpty } from 'class-validator';
+
+export class AnalyzePgnDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(3000)
+  pgn: string;
+}
 
 @Controller('api/analysis')
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
 
   @Post('pgn')
-  async analyzePgn(@Body() body: { pgn: string }) {
+  async analyzePgn(@Body() body: AnalyzePgnDto) {
     if (!body.pgn) throw new Error('PGN required');
     return this.analysisService.analyzePgn(body.pgn);
   }
