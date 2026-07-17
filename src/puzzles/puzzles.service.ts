@@ -146,7 +146,9 @@ export class PuzzlesService {
     });
 
     if (success) {
-      await this.questsService.incrementQuestProgress(userId, 'SOLVE_PUZZLES').catch(() => {});
+      await this.questsService
+        .incrementQuestProgress(userId, 'SOLVE_PUZZLES')
+        .catch(() => {});
     }
 
     return {

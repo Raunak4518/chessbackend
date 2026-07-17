@@ -76,4 +76,3 @@ export class PuzzlesController {
     return this.puzzlesService.addDailyPuzzleComment(userId, id, body.content);
   }
 }
-

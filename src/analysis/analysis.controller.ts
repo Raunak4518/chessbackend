@@ -37,4 +37,3 @@ export class AnalysisController {
     return this.analysisService.analyzeGame(id);
   }
 }
-

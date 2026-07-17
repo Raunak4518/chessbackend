@@ -51,4 +51,3 @@ export class AcademyController {
     return { success: true, record };
   }
 }
-

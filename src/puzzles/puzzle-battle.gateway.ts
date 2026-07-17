@@ -149,8 +149,18 @@ export class PuzzleBattleGateway
             roomId,
             puzzles,
             players: {
-              [p1.socketId]: { id: p1.id, name: p1.name, rating: p1.rating, socketId: p1.socketId },
-              [p2.socketId]: { id: p2.id, name: p2.name, rating: p2.rating, socketId: p2.socketId },
+              [p1.socketId]: {
+                id: p1.id,
+                name: p1.name,
+                rating: p1.rating,
+                socketId: p1.socketId,
+              },
+              [p2.socketId]: {
+                id: p2.id,
+                name: p2.name,
+                rating: p2.rating,
+                socketId: p2.socketId,
+              },
             },
           });
         }
@@ -165,7 +175,8 @@ export class PuzzleBattleGateway
 
   @SubscribeMessage('makeMove')
   handleMakeMove(
-    @MessageBody() data: { roomId: string; source: string; target: string; fen: string },
+    @MessageBody()
+    data: { roomId: string; source: string; target: string; fen: string },
     @ConnectedSocket() client: Socket,
   ) {
     const room = this.rooms[data.roomId];
@@ -188,7 +199,7 @@ export class PuzzleBattleGateway
       const player = room.players[client.id];
       if (player) {
         player.score += 1;
-        
+
         // Notify both players who won the round
         this.server.to(data.roomId).emit('roundWon', {
           winnerSocketId: client.id,
@@ -201,14 +212,22 @@ export class PuzzleBattleGateway
         if (player.score === 3) {
           room.status = 'FINISHED';
           const winnerId = player.id;
-          const loserId = Object.values(room.players).find(p => p.id !== winnerId)?.id;
+          const loserId = Object.values(room.players).find(
+            (p) => p.id !== winnerId,
+          )?.id;
 
           if (winnerId) {
-            this.questsService.incrementQuestProgress(winnerId, 'WIN_PUZZLE_BATTLE').catch(() => {});
-            this.questsService.incrementQuestProgress(winnerId, 'PLAY_BATTLES').catch(() => {});
+            this.questsService
+              .incrementQuestProgress(winnerId, 'WIN_PUZZLE_BATTLE')
+              .catch(() => {});
+            this.questsService
+              .incrementQuestProgress(winnerId, 'PLAY_BATTLES')
+              .catch(() => {});
           }
           if (loserId) {
-            this.questsService.incrementQuestProgress(loserId, 'PLAY_BATTLES').catch(() => {});
+            this.questsService
+              .incrementQuestProgress(loserId, 'PLAY_BATTLES')
+              .catch(() => {});
           }
         }
       }
@@ -237,4 +256,3 @@ export class PuzzleBattleGateway
     // Full rematch logic requires tracking both acceptances.
   }
 }
-

@@ -91,4 +91,3 @@ export class SocialController {
     return this.socialService.declineChallenge(this.getUserId(req), id);
   }
 }
-

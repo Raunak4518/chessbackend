@@ -436,9 +436,15 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
             // Quests Integration
             if (outcome === 1.0) {
-              await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
+              await this.questsService.incrementQuestProgress(
+                whiteUserId,
+                'WIN_GAMES',
+              );
             } else if (outcome === 0.0) {
-              await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
+              await this.questsService.incrementQuestProgress(
+                blackUserId,
+                'WIN_GAMES',
+              );
             }
           }
         }
@@ -527,9 +533,15 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Quests Integration
         if (outcome === 1.0) {
-          await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
+          await this.questsService.incrementQuestProgress(
+            whiteUserId,
+            'WIN_GAMES',
+          );
         } else if (outcome === 0.0) {
-          await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
+          await this.questsService.incrementQuestProgress(
+            blackUserId,
+            'WIN_GAMES',
+          );
         }
       }
     } catch {
@@ -568,4 +580,3 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 }
-

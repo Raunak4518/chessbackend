@@ -53,4 +53,3 @@ export class DailyGamesController {
     return this.dailyGamesService.makeMove(userId, gameId, body.from, body.to);
   }
 }
-

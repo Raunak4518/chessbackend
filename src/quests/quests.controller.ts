@@ -10,7 +10,7 @@ export class QuestsController {
   async getActiveQuests(@Req() req: AuthenticatedRequest) {
     // If not authenticated, return empty array for now
     if (!req.user || !req.user.id) return [];
-    
+
     return this.questsService.getActiveQuests(req.user.id);
   }
 }
