@@ -21,6 +21,8 @@ import { PuzzlesModule } from './puzzles/puzzles.module';
 import { StudiesModule } from './studies/studies.module';
 import { QuestsModule } from './quests/quests.module';
 import { FactionsModule } from './factions/factions.module';
+import { AntiCheatModule } from './anti-cheat/anti-cheat.module';
+import { StreamerModule } from './streamer/streamer.module';
 
 @Module({
   imports: [
@@ -64,6 +66,8 @@ import { FactionsModule } from './factions/factions.module';
     StudiesModule,
     QuestsModule,
     FactionsModule,
+    AntiCheatModule,
+    StreamerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

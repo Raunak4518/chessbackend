@@ -102,6 +102,8 @@ model User {
   
   factionId          String?
   faction            Faction?  @relation(fields: [factionId], references: [id])
+  
+  isFlaggedForCheating Boolean @default(false)
 }
 
 model Session {

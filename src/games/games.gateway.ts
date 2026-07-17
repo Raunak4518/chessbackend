@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TournamentsService } from '../tournaments/tournaments.service';
 import { QuestsService } from '../quests/quests.service';
 import { FactionsService } from '../factions/factions.service';
+import { AntiCheatProducer } from '../anti-cheat/anti-cheat.producer';
 import type { AuthenticatedSocket } from '../types';
 import { Chess } from 'chess.js';
 import {
@@ -170,6 +171,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly tournamentsService: TournamentsService,
     private readonly questsService: QuestsService,
     private readonly factionsService: FactionsService,
+    private readonly antiCheatProducer: AntiCheatProducer,
   ) {
     this.matchmakingService.registerMatchCallback((match) => {
       this.handleMatchFound(match);
@@ -444,6 +446,14 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
               await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
               await this.factionsService.incrementFactionScoreForUser(blackUserId, 15).catch(() => {});
             }
+
+            // Anti-cheat background processing
+            this.antiCheatProducer.analyzeGame({
+              gameId: data.room,
+              whitePlayerId: whiteUserId,
+              blackPlayerId: blackUserId,
+              pgn: chess.pgn(),
+            }).catch(err => console.error('Failed to queue anti-cheat job', err));
           }
         }
       } catch {
@@ -537,6 +547,14 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
           await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
           await this.factionsService.incrementFactionScoreForUser(blackUserId, 15).catch(() => {});
         }
+
+        // Anti-cheat background processing
+        this.antiCheatProducer.analyzeGame({
+          gameId: data.room,
+          whitePlayerId: whiteUserId,
+          blackPlayerId: blackUserId,
+          pgn: chess.pgn(),
+        }).catch(err => console.error('Failed to queue anti-cheat job', err));
       }
     } catch {
       // Ignored
