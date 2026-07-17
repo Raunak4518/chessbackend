@@ -18,6 +18,7 @@ import { ResetGameDto } from './dtos/reset-game.dto';
 import { JoinQueueDto } from './dtos/join-queue.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TournamentsService } from '../tournaments/tournaments.service';
+import type { AuthenticatedSocket } from '../types';
 import { Chess } from 'chess.js';
 import {
   decayRD,
@@ -59,8 +60,20 @@ async function updateRatingsOnNest(
     const decayedRDA = decayRD(rdA, laA);
     const decayedRDB = decayRD(rdB, laB);
 
-    const updateA = calculateNewRatingAndRD(rA, decayedRDA, rB, decayedRDB, outcome);
-    const updateB = calculateNewRatingAndRD(rB, decayedRDB, rA, decayedRDA, 1.0 - outcome);
+    const updateA = calculateNewRatingAndRD(
+      rA,
+      decayedRDA,
+      rB,
+      decayedRDB,
+      outcome,
+    );
+    const updateB = calculateNewRatingAndRD(
+      rB,
+      decayedRDB,
+      rA,
+      decayedRDA,
+      1.0 - outcome,
+    );
 
     const now = new Date();
     await prisma.$transaction([
@@ -87,30 +100,39 @@ async function updateRatingsOnNest(
           userId: whiteId,
           rating: updateA.rating,
           gameType,
-        }
+        },
       }),
       prisma.ratingHistory.create({
         data: {
           userId: blackId,
           rating: updateB.rating,
           gameType,
-        }
-      })
+        },
+      }),
     ]);
 
     // Simple achievement check
-    const checkAchievements = async (userId: string, isWinner: boolean, oppRating: number, newRating: number) => {
-      const existing = await prisma.userAchievement.findMany({ where: { userId } });
-      const unlocked = new Set(existing.map(a => a.achievement));
-      
+    const checkAchievements = async (
+      userId: string,
+      isWinner: boolean,
+      oppRating: number,
+      newRating: number,
+    ) => {
+      const existing = await prisma.userAchievement.findMany({
+        where: { userId },
+      });
+      const unlocked = new Set(existing.map((a) => a.achievement));
+
       const toUnlock: string[] = [];
       if (isWinner && !unlocked.has('FIRST_WIN')) toUnlock.push('FIRST_WIN');
-      if (isWinner && oppRating > 1500 && !unlocked.has('BEAT_1500')) toUnlock.push('BEAT_1500');
-      if (newRating > 1500 && !unlocked.has('REACHED_1500')) toUnlock.push('REACHED_1500');
+      if (isWinner && oppRating > 1500 && !unlocked.has('BEAT_1500'))
+        toUnlock.push('BEAT_1500');
+      if (newRating > 1500 && !unlocked.has('REACHED_1500'))
+        toUnlock.push('REACHED_1500');
 
       if (toUnlock.length > 0) {
         await prisma.userAchievement.createMany({
-          data: toUnlock.map(a => ({ userId, achievement: a })),
+          data: toUnlock.map((a) => ({ userId, achievement: a })),
           skipDuplicates: true,
         });
       }
@@ -123,7 +145,6 @@ async function updateRatingsOnNest(
       await checkAchievements(whiteId, false, rB, updateA.rating);
       await checkAchievements(blackId, true, rA, updateB.rating);
     }
-
   } catch (err) {
     console.error('Failed to update ratings in NestJS transaction:', err);
   }
@@ -151,11 +172,14 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  async handleConnection(client: Socket) {
-    let sessionToken = client.handshake.auth?.token;
+  async handleConnection(client: AuthenticatedSocket) {
+    let sessionToken = (client.handshake.auth as Record<string, unknown>)
+      ?.token as string | undefined;
 
     if (!sessionToken && client.handshake.headers.cookie) {
-      const match = client.handshake.headers.cookie.match(/better-auth\.session-token=([^;]+)/);
+      const match = client.handshake.headers.cookie.match(
+        /better-auth\.session-token=([^;]+)/,
+      );
       if (match) {
         sessionToken = match[1];
       }
@@ -172,7 +196,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
           client.data.user = session.user;
           return;
         }
-      } catch (err) {
+      } catch {
         // Ignored fallback
       }
     }
@@ -216,23 +240,27 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const blackSocket = this.server.sockets.sockets.get(match.black);
 
       if (whiteSocket) {
-        whiteSocket.join(match.roomName);
+        void whiteSocket.join(match.roomName);
         whiteSocket.emit('roomJoined', { color: 'w', room: match.roomName });
       }
 
       if (blackSocket) {
-        blackSocket.join(match.roomName);
+        void blackSocket.join(match.roomName);
         blackSocket.emit('roomJoined', { color: 'b', room: match.roomName });
       }
 
       const getProfile = (socketId: string) => {
-        const socket = this.server.sockets.sockets.get(socketId);
+        const socket = this.server.sockets.sockets.get(socketId) as
+          | AuthenticatedSocket
+          | undefined;
         const gt = room.gameType;
         const fields = getPlayerRatingField(gt);
         return {
           id: socket?.data?.user?.id ?? socketId,
           name: socket?.data?.user?.name ?? `Guest-${socketId.slice(0, 5)}`,
-          rating: socket?.data?.user ? (socket.data.user[fields.rating] ?? 1200) : 1200,
+          rating: socket?.data?.user
+            ? (socket.data.user[fields.rating] ?? 1200)
+            : 1200,
         };
       };
 
@@ -248,14 +276,16 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('joinQueue')
   handleJoinQueue(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: JoinQueueDto,
   ) {
     const tc = data.timeControl ?? '10|0';
     const parsed = parseTimeControl(tc);
     const fields = getPlayerRatingField(parsed.gameType);
 
-    const userRating = client.data.user ? (client.data.user[fields.rating] ?? 1200) : 1200;
+    const userRating = client.data.user
+      ? ((client.data.user[fields.rating] as number) ?? 1200)
+      : 1200;
 
     this.matchmakingService.joinQueue(
       client.id,
@@ -268,14 +298,16 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('joinTournamentQueue')
   handleJoinTournamentQueue(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { tournamentId: string; timeControl: string },
   ) {
     const tc = data.timeControl ?? '10|0';
     const parsed = parseTimeControl(tc);
     const fields = getPlayerRatingField(parsed.gameType);
 
-    const userRating = client.data.user ? (client.data.user[fields.rating] ?? 1200) : 1200;
+    const userRating = client.data.user
+      ? ((client.data.user[fields.rating] as number) ?? 1200)
+      : 1200;
 
     this.matchmakingService.joinQueue(
       client.id,
@@ -288,36 +320,40 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('leaveQueue')
-  handleLeaveQueue(@ConnectedSocket() client: Socket) {
+  handleLeaveQueue(@ConnectedSocket() client: AuthenticatedSocket) {
     this.matchmakingService.leaveQueue(client.id);
     client.emit('queueLeft');
   }
 
   @SubscribeMessage('joinRoom')
   handleJoinRoom(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: JoinRoomDto,
   ) {
     const roomName = data.room;
     const existing = this.gamesService.getRoom(roomName);
 
     if (!existing) {
-      const room = this.gamesService.createRoom(roomName, client.id);
-      client.join(roomName);
+      this.gamesService.createRoom(roomName, client.id);
+      void client.join(roomName);
       client.emit('roomJoined', { color: 'w', room: roomName });
     } else if (existing.players.length === 1) {
       const room = this.gamesService.joinRoom(roomName, client.id);
       if (room) {
-        client.join(roomName);
+        void client.join(roomName);
         client.emit('roomJoined', { color: 'b', room: roomName });
 
         const getProfile = (socketId: string) => {
-          const socket = this.server.sockets.sockets.get(socketId);
+          const socket = this.server.sockets.sockets.get(socketId) as
+            | AuthenticatedSocket
+            | undefined;
           const fields = getPlayerRatingField(room.gameType);
           return {
             id: socket?.data?.user?.id ?? socketId,
             name: socket?.data?.user?.name ?? `Guest-${socketId.slice(0, 5)}`,
-            rating: socket?.data?.user ? (socket.data.user[fields.rating] ?? 1200) : 1200,
+            rating: socket?.data?.user
+              ? (socket.data.user[fields.rating] ?? 1200)
+              : 1200,
           };
         };
 
@@ -336,7 +372,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('makeMove')
   async handleMakeMove(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: MakeMoveDto,
   ) {
     const room = this.gamesService.getRoom(data.room);
@@ -360,13 +396,22 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
           }
 
           const movesCount = chess.history().length;
-          const whiteSocket = this.server.sockets.sockets.get(room.whitePlayerId);
-          const blackSocket = this.server.sockets.sockets.get(room.blackPlayerId);
+          const whiteSocket = this.server.sockets.sockets.get(
+            room.whitePlayerId,
+          ) as AuthenticatedSocket | undefined;
+          const blackSocket = this.server.sockets.sockets.get(
+            room.blackPlayerId,
+          ) as AuthenticatedSocket | undefined;
 
           const whiteUserId = whiteSocket?.data?.user?.id;
           const blackUserId = blackSocket?.data?.user?.id;
 
-          if (whiteUserId && blackUserId && whiteUserId !== room.whitePlayerId && blackUserId !== room.blackPlayerId) {
+          if (
+            whiteUserId &&
+            blackUserId &&
+            whiteUserId !== room.whitePlayerId &&
+            blackUserId !== room.blackPlayerId
+          ) {
             await updateRatingsOnNest(
               this.prisma,
               whiteUserId,
@@ -377,17 +422,18 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
             );
 
             if (room.tournamentId) {
-              const gameWinner = outcome === 1.0 ? 'WHITE' : outcome === 0.0 ? 'BLACK' : 'DRAW';
+              const gameWinner =
+                outcome === 1.0 ? 'WHITE' : outcome === 0.0 ? 'BLACK' : 'DRAW';
               await this.tournamentsService.recordGameResult(
                 room.tournamentId,
                 whiteUserId,
                 blackUserId,
-                gameWinner as any
+                gameWinner,
               );
             }
           }
         }
-      } catch (err) {
+      } catch {
         // Ignored
       }
     }
@@ -395,7 +441,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('undoMove')
   handleUndoMove(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: UndoMoveDto,
   ) {
     const updated = this.gamesService.updateFen(data.room, data.fen);
@@ -410,7 +456,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('resetGame')
   handleResetGame(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: ResetGameDto,
   ) {
     const nextFen = this.gamesService.resetRoom(data.room);
@@ -421,7 +467,7 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('resign')
   async handleResign(
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: ResetGameDto,
   ) {
     const room = this.gamesService.getRoom(data.room);
@@ -434,13 +480,22 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const chess = new Chess(room.fen);
       const movesCount = chess.history().length;
 
-      const whiteSocket = this.server.sockets.sockets.get(room.whitePlayerId);
-      const blackSocket = this.server.sockets.sockets.get(room.blackPlayerId);
+      const whiteSocket = this.server.sockets.sockets.get(
+        room.whitePlayerId,
+      ) as AuthenticatedSocket | undefined;
+      const blackSocket = this.server.sockets.sockets.get(
+        room.blackPlayerId,
+      ) as AuthenticatedSocket | undefined;
 
       const whiteUserId = whiteSocket?.data?.user?.id;
       const blackUserId = blackSocket?.data?.user?.id;
 
-      if (whiteUserId && blackUserId && whiteUserId !== room.whitePlayerId && blackUserId !== room.blackPlayerId) {
+      if (
+        whiteUserId &&
+        blackUserId &&
+        whiteUserId !== room.whitePlayerId &&
+        blackUserId !== room.blackPlayerId
+      ) {
         await updateRatingsOnNest(
           this.prisma,
           whiteUserId,
@@ -451,16 +506,17 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
         );
 
         if (room.tournamentId) {
-          const gameWinner = outcome === 1.0 ? 'WHITE' : outcome === 0.0 ? 'BLACK' : 'DRAW';
+          const gameWinner =
+            outcome === 1.0 ? 'WHITE' : outcome === 0.0 ? 'BLACK' : 'DRAW';
           await this.tournamentsService.recordGameResult(
             room.tournamentId,
             whiteUserId,
             blackUserId,
-            gameWinner as any
+            gameWinner,
           );
         }
       }
-    } catch (err) {
+    } catch {
       // Ignored
     }
   }
@@ -471,24 +527,29 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { room: string },
   ) {
     const roomName = data.room;
-    client.join(roomName);
-    
+    void client.join(roomName);
+
     const room = this.gamesService.getRoom(roomName);
     if (room) {
-      client.emit('spectateStart', { fen: room.fen, timeControl: room.timeControl, gameType: room.gameType });
+      client.emit('spectateStart', {
+        fen: room.fen,
+        timeControl: room.timeControl,
+        gameType: room.gameType,
+      });
     }
   }
 
   @SubscribeMessage('sendGameMessage')
   handleSendGameMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { room: string, message: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { room: string; message: string },
   ) {
-    const username = client.data?.user?.name || 'Guest';
+    const username = (client.data?.user?.name as string) || 'Guest';
     this.server.to(data.room).emit('gameMessage', {
       sender: username,
       message: data.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 }
+

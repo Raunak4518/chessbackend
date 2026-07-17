@@ -1,4 +1,10 @@
-import { Controller, Get, Param, Query, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 
@@ -10,7 +16,7 @@ export class UsersController {
   @Get('search')
   async searchUsers(@Query('q') query: string) {
     if (!query || query.length < 2) return [];
-    
+
     return this.prisma.user.findMany({
       where: {
         name: {
@@ -24,7 +30,7 @@ export class UsersController {
         name: true,
         rating: true,
         image: true,
-      }
+      },
     });
   }
 
@@ -56,18 +62,31 @@ export class UsersController {
 
     const games = await this.prisma.game.findMany({
       where: {
-        OR: [
-          { whitePlayerId: id },
-          { blackPlayerId: id },
-        ],
+        OR: [{ whitePlayerId: id }, { blackPlayerId: id }],
         status: { in: ['COMPLETED', 'DRAW'] },
       },
       include: {
         whitePlayer: {
-          select: { id: true, name: true, image: true, ratingBullet: true, ratingBlitz: true, ratingRapid: true, ratingDaily: true },
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            ratingBullet: true,
+            ratingBlitz: true,
+            ratingRapid: true,
+            ratingDaily: true,
+          },
         },
         blackPlayer: {
-          select: { id: true, name: true, image: true, ratingBullet: true, ratingBlitz: true, ratingRapid: true, ratingDaily: true },
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            ratingBullet: true,
+            ratingBlitz: true,
+            ratingRapid: true,
+            ratingDaily: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -75,7 +94,10 @@ export class UsersController {
     });
 
     const statsTypes = ['BULLET', 'BLITZ', 'RAPID', 'DAILY'];
-    const stats: Record<string, { total: number; wins: number; losses: number; draws: number }> = {};
+    const stats: Record<
+      string,
+      { total: number; wins: number; losses: number; draws: number }
+    > = {};
 
     for (const type of statsTypes) {
       stats[type] = { total: 0, wins: 0, losses: 0, draws: 0 };
@@ -83,10 +105,7 @@ export class UsersController {
 
     const allGames = await this.prisma.game.findMany({
       where: {
-        OR: [
-          { whitePlayerId: id },
-          { blackPlayerId: id },
-        ],
+        OR: [{ whitePlayerId: id }, { blackPlayerId: id }],
         status: { in: ['COMPLETED', 'DRAW'] },
       },
     });
@@ -124,19 +143,55 @@ export class UsersController {
 
   @Get('leaderboard/global')
   async getGlobalLeaderboard() {
-    const topBullet = await this.prisma.user.findMany({ orderBy: { ratingBullet: 'desc' }, take: 50, select: { id: true, name: true, image: true, country: true, ratingBullet: true }});
-    const topBlitz = await this.prisma.user.findMany({ orderBy: { ratingBlitz: 'desc' }, take: 50, select: { id: true, name: true, image: true, country: true, ratingBlitz: true }});
-    const topRapid = await this.prisma.user.findMany({ orderBy: { ratingRapid: 'desc' }, take: 50, select: { id: true, name: true, image: true, country: true, ratingRapid: true }});
+    const topBullet = await this.prisma.user.findMany({
+      orderBy: { ratingBullet: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        country: true,
+        ratingBullet: true,
+      },
+    });
+    const topBlitz = await this.prisma.user.findMany({
+      orderBy: { ratingBlitz: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        country: true,
+        ratingBlitz: true,
+      },
+    });
+    const topRapid = await this.prisma.user.findMany({
+      orderBy: { ratingRapid: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        country: true,
+        ratingRapid: true,
+      },
+    });
 
     return { bullet: topBullet, blitz: topBlitz, rapid: topRapid };
   }
 
   @Get(':id/rating-history')
-  async getRatingHistory(@Param('id') id: string, @Query('timeframe') timeframe: string) {
+  async getRatingHistory(
+    @Param('id') id: string,
+    @Query('timeframe') timeframe: string,
+  ) {
     let dateFilter = new Date(0); // All time
-    if (timeframe === '7d') dateFilter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    else if (timeframe === '30d') dateFilter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    else if (timeframe === '1y') dateFilter = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    if (timeframe === '7d')
+      dateFilter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    else if (timeframe === '30d')
+      dateFilter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    else if (timeframe === '1y')
+      dateFilter = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
 
     const history = await this.prisma.ratingHistory.findMany({
       where: {
@@ -153,10 +208,7 @@ export class UsersController {
   async getAdvancedInsights(@Param('id') id: string) {
     const allGames = await this.prisma.game.findMany({
       where: {
-        OR: [
-          { whitePlayerId: id },
-          { blackPlayerId: id },
-        ],
+        OR: [{ whitePlayerId: id }, { blackPlayerId: id }],
         status: { in: ['COMPLETED', 'DRAW'] },
       },
       select: {
@@ -166,21 +218,21 @@ export class UsersController {
         blackPlayerId: true,
         opening: true,
         createdAt: true,
-      }
+      },
     });
 
     const insights = {
       white: { wins: 0, losses: 0, draws: 0 },
       black: { wins: 0, losses: 0, draws: 0 },
-      openings: {} as Record<string, { wins: 0, losses: 0, draws: 0 }>,
+      openings: {} as Record<string, { wins: 0; losses: 0; draws: 0 }>,
       timeOfDay: { morning: 0, afternoon: 0, evening: 0, night: 0 },
     };
 
     for (const g of allGames) {
       const isWhite = g.whitePlayerId === id;
-      const didWin = (isWhite && g.winner === 'WHITE') || (!isWhite && g.winner === 'BLACK');
+      const didWin =
+        (isWhite && g.winner === 'WHITE') || (!isWhite && g.winner === 'BLACK');
       const isDraw = g.winner === 'DRAW' || g.status === 'DRAW';
-      const didLose = !didWin && !isDraw;
 
       if (isWhite) {
         if (didWin) insights.white.wins++;
@@ -193,7 +245,8 @@ export class UsersController {
       }
 
       const opening = g.opening || 'Unknown';
-      if (!insights.openings[opening]) insights.openings[opening] = { wins: 0, losses: 0, draws: 0 };
+      if (!insights.openings[opening])
+        insights.openings[opening] = { wins: 0, losses: 0, draws: 0 };
       if (didWin) insights.openings[opening].wins++;
       else if (isDraw) insights.openings[opening].draws++;
       else insights.openings[opening].losses++;

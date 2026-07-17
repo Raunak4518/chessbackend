@@ -20,7 +20,11 @@ export function calculateG(rd: number): number {
   return 1.0 / Math.sqrt(1.0 + (3.0 * Q * Q * rd * rd) / (Math.PI * Math.PI));
 }
 
-export function calculateExpectedScore(r: number, opponentR: number, opponentRD: number): number {
+export function calculateExpectedScore(
+  r: number,
+  opponentR: number,
+  opponentRD: number,
+): number {
   const g = calculateG(opponentRD);
   const exponent = (-g * (r - opponentR)) / 400.0;
   return 1.0 / (1.0 + Math.pow(10, exponent));
@@ -41,7 +45,8 @@ export function calculateNewRatingAndRD(
   let newRDA = Math.sqrt(1.0 / (1.0 / (rdA * rdA) + 1.0 / dASquared));
   newRDA = Math.max(newRDA, MIN_RD);
 
-  const newRA = rA + (Q / (1.0 / (rdA * rdA) + 1.0 / dASquared)) * gB * (outcome - eA);
+  const newRA =
+    rA + (Q / (1.0 / (rdA * rdA) + 1.0 / dASquared)) * gB * (outcome - eA);
 
   return {
     rating: Math.round(newRA),
@@ -49,7 +54,10 @@ export function calculateNewRatingAndRD(
   };
 }
 
-export function parseTimeControl(tc?: string): { timeControl: string; gameType: string } {
+export function parseTimeControl(tc?: string): {
+  timeControl: string;
+  gameType: string;
+} {
   if (!tc) {
     return { timeControl: '10|0', gameType: 'RAPID' };
   }
@@ -88,15 +96,35 @@ export function parseTimeControl(tc?: string): { timeControl: string; gameType: 
   return { timeControl: tc, gameType };
 }
 
-export function getPlayerRatingField(gameType: string): { rating: string; rd: string; lastActive: string } {
+export function getPlayerRatingField(gameType: string): {
+  rating: string;
+  rd: string;
+  lastActive: string;
+} {
   switch (gameType) {
     case 'BULLET':
-      return { rating: 'ratingBullet', rd: 'rdBullet', lastActive: 'lastActiveBullet' };
+      return {
+        rating: 'ratingBullet',
+        rd: 'rdBullet',
+        lastActive: 'lastActiveBullet',
+      };
     case 'BLITZ':
-      return { rating: 'ratingBlitz', rd: 'rdBlitz', lastActive: 'lastActiveBlitz' };
+      return {
+        rating: 'ratingBlitz',
+        rd: 'rdBlitz',
+        lastActive: 'lastActiveBlitz',
+      };
     case 'DAILY':
-      return { rating: 'ratingDaily', rd: 'rdDaily', lastActive: 'lastActiveDaily' };
+      return {
+        rating: 'ratingDaily',
+        rd: 'rdDaily',
+        lastActive: 'lastActiveDaily',
+      };
     default:
-      return { rating: 'ratingRapid', rd: 'rdRapid', lastActive: 'lastActiveRapid' };
+      return {
+        rating: 'ratingRapid',
+        rd: 'rdRapid',
+        lastActive: 'lastActiveRapid',
+      };
   }
 }

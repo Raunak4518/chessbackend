@@ -1,13 +1,21 @@
-import { Controller, Get, Post, Param, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { AuthenticatedRequest } from '../types';
 
 @Controller('academy')
 export class AcademyController {
   constructor(private prisma: PrismaService) {}
 
   @Get('progress')
-  async getProgress(@Req() req: any) {
-    const userId = req.user?.id || req.session?.user?.id || req.session?.userId;
+  async getProgress(@Req() req: AuthenticatedRequest) {
+    const userId = req.user?.id || (req.session?.userId as string);
     if (!userId) {
       return [];
     }
@@ -21,10 +29,15 @@ export class AcademyController {
   }
 
   @Post('complete/:lessonId')
-  async completeLesson(@Param('lessonId') lessonId: string, @Req() req: any) {
-    const userId = req.user?.id || req.session?.user?.id || req.session?.userId;
+  async completeLesson(
+    @Param('lessonId') lessonId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const userId = req.user?.id || (req.session?.userId as string);
     if (!userId) {
-      throw new UnauthorizedException('You must be logged in to track progress.');
+      throw new UnauthorizedException(
+        'You must be logged in to track progress.',
+      );
     }
 
     const record = await this.prisma.lessonProgress.upsert({
@@ -38,3 +51,4 @@ export class AcademyController {
     return { success: true, record };
   }
 }
+

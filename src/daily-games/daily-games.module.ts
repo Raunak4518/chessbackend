@@ -4,6 +4,6 @@ import { DailyGamesService } from './daily-games.service';
 
 @Module({
   controllers: [DailyGamesController],
-  providers: [DailyGamesService]
+  providers: [DailyGamesService],
 })
 export class DailyGamesModule {}

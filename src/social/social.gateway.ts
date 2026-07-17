@@ -1,4 +1,9 @@
-import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
@@ -19,9 +24,12 @@ export class SocialGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(private readonly prisma: PrismaService) {}
 
   async handleConnection(client: Socket) {
-    let sessionToken = client.handshake.auth?.token;
+    let sessionToken = (client.handshake.auth as Record<string, unknown>)
+      ?.token as string;
     if (!sessionToken && client.handshake.headers.cookie) {
-      const match = client.handshake.headers.cookie.match(/better-auth\.session-token=([^;]+)/);
+      const match = client.handshake.headers.cookie.match(
+        /better-auth\.session-token=([^;]+)/,
+      );
       if (match) {
         sessionToken = match[1];
       }
@@ -39,7 +47,9 @@ export class SocialGateway implements OnGatewayConnection, OnGatewayDisconnect {
           // Broadcast that this user is online
           this.server.emit('userOnline', { userId: session.user.id });
         }
-      } catch (err) {}
+      } catch {
+        // ignore errors resolving session
+      }
     }
   }
 
@@ -53,7 +63,7 @@ export class SocialGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  notifyUser(userId: string, event: string, data: any) {
+  notifyUser(userId: string, event: string, data: unknown) {
     const socketId = this.userSockets.get(userId);
     if (socketId) {
       this.server.to(socketId).emit(event, data);

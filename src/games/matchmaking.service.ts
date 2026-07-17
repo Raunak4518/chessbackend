@@ -40,7 +40,13 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
     this.matchCallback = callback;
   }
 
-  joinQueue(socketId: string, rating: number, timeControl: string, gameType: string, tournamentId?: string) {
+  joinQueue(
+    socketId: string,
+    rating: number,
+    timeControl: string,
+    gameType: string,
+    tournamentId?: string,
+  ) {
     this.leaveQueue(socketId);
     this.queue.push({
       socketId,
@@ -74,7 +80,7 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
 
         // Must be in the same gameType pool
         if (playerA.gameType !== playerB.gameType) continue;
-        
+
         // Must be in the same tournament (or both outside)
         if (playerA.tournamentId !== playerB.tournamentId) continue;
 

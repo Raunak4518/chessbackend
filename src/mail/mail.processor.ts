@@ -22,7 +22,7 @@ export class MailProcessor extends WorkerHost {
 
     if (template === 'otp') {
       this.logger.log(
-        `[DEV ONLY - OTP CODE]: The verification code for ${to} is: ${context.otp}`,
+        `[DEV ONLY - OTP CODE]: The verification code for ${to} is: ${String(context.otp)}`,
       );
     }
 

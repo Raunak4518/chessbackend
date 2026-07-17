@@ -5,6 +5,6 @@ import { SocialGateway } from './social.gateway';
 
 @Module({
   providers: [SocialService, SocialGateway],
-  controllers: [SocialController]
+  controllers: [SocialController],
 })
 export class SocialModule {}

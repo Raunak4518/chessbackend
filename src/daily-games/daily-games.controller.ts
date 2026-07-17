@@ -1,21 +1,38 @@
-import { Controller, Post, Get, Body, Param, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { DailyGamesService } from './daily-games.service';
+import type { AuthenticatedRequest } from '../types';
+import { CreateDailyGameDto, MakeDailyMoveDto } from './dto/daily-games.dto';
 
 @Controller('api/games/daily')
 export class DailyGamesController {
   constructor(private readonly dailyGamesService: DailyGamesService) {}
 
   @Post()
-  async createGame(@Req() req: any, @Body() body: { opponentId: string; daysPerMove: number }) {
+  async createGame(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateDailyGameDto,
+  ) {
     // Fallback logic in case req.user is undefined by better-auth
-    const userId = req.user?.id || req.body?.userId;
+    const userId = req.user?.id;
     if (!userId) throw new UnauthorizedException('Not logged in');
-    return this.dailyGamesService.createDailyGame(userId, body.opponentId, body.daysPerMove);
+    return this.dailyGamesService.createDailyGame(
+      userId,
+      body.opponentId,
+      body.daysPerMove,
+    );
   }
 
   @Get('my-games')
-  async getMyGames(@Req() req: any) {
-    const userId = req.user?.id || req.query?.userId;
+  async getMyGames(@Req() req: AuthenticatedRequest) {
+    const userId = req.user?.id;
     if (!userId) throw new UnauthorizedException('Not logged in');
     return this.dailyGamesService.getMyDailyGames(userId);
   }
@@ -27,12 +44,13 @@ export class DailyGamesController {
 
   @Post(':id/move')
   async makeMove(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Param('id') gameId: string,
-    @Body() body: { from: string; to: string; userId?: string }
+    @Body() body: MakeDailyMoveDto,
   ) {
     const userId = req.user?.id || body.userId;
     if (!userId) throw new UnauthorizedException('Not logged in');
     return this.dailyGamesService.makeMove(userId, gameId, body.from, body.to);
   }
 }
+

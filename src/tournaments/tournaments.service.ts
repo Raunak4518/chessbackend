@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TournamentStatus, TournamentType, GameWinner } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -9,7 +14,12 @@ export class TournamentsService {
 
   constructor(private prisma: PrismaService) {}
 
-  async createArena(name: string, timeControl: string, startTime: Date, durationMinutes: number) {
+  async createArena(
+    name: string,
+    timeControl: string,
+    startTime: Date,
+    durationMinutes: number,
+  ) {
     const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
     return this.prisma.tournament.create({
       data: {
@@ -47,9 +57,12 @@ export class TournamentsService {
   }
 
   async joinTournament(userId: string, tournamentId: string) {
-    const tournament = await this.prisma.tournament.findUnique({ where: { id: tournamentId } });
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
     if (!tournament) throw new NotFoundException('Tournament not found');
-    if (tournament.status === TournamentStatus.COMPLETED) throw new BadRequestException('Tournament is already completed');
+    if (tournament.status === TournamentStatus.COMPLETED)
+      throw new BadRequestException('Tournament is already completed');
 
     const existing = await this.prisma.tournamentPlayer.findUnique({
       where: { userId_tournamentId: { userId, tournamentId } },
@@ -61,12 +74,24 @@ export class TournamentsService {
     });
   }
 
-  async recordGameResult(tournamentId: string, whitePlayerId: string, blackPlayerId: string, winner: GameWinner | null) {
-    const tournament = await this.prisma.tournament.findUnique({ where: { id: tournamentId } });
-    if (!tournament || tournament.status !== TournamentStatus.IN_PROGRESS) return;
+  async recordGameResult(
+    tournamentId: string,
+    whitePlayerId: string,
+    blackPlayerId: string,
+    winner: GameWinner | null,
+  ) {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+    if (!tournament || tournament.status !== TournamentStatus.IN_PROGRESS)
+      return;
 
     // Helper to calculate score and streak
-    const updatePlayer = async (userId: string, isWinner: boolean, isDraw: boolean) => {
+    const updatePlayer = async (
+      userId: string,
+      isWinner: boolean,
+      isDraw: boolean,
+    ) => {
       const player = await this.prisma.tournamentPlayer.findUnique({
         where: { userId_tournamentId: { userId, tournamentId } },
       });
@@ -112,24 +137,34 @@ export class TournamentsService {
       where: { status: TournamentStatus.UPCOMING, startTime: { lte: now } },
     });
     for (const t of upcoming) {
-      await this.prisma.tournament.update({ where: { id: t.id }, data: { status: TournamentStatus.IN_PROGRESS } });
+      await this.prisma.tournament.update({
+        where: { id: t.id },
+        data: { status: TournamentStatus.IN_PROGRESS },
+      });
       this.logger.log(`Tournament started: ${t.id}`);
     }
 
     // End Arena tournaments
     const inProgress = await this.prisma.tournament.findMany({
-      where: { status: TournamentStatus.IN_PROGRESS, endTime: { lte: now }, type: TournamentType.ARENA },
+      where: {
+        status: TournamentStatus.IN_PROGRESS,
+        endTime: { lte: now },
+        type: TournamentType.ARENA,
+      },
     });
     for (const t of inProgress) {
-      await this.prisma.tournament.update({ where: { id: t.id }, data: { status: TournamentStatus.COMPLETED } });
+      await this.prisma.tournament.update({
+        where: { id: t.id },
+        data: { status: TournamentStatus.COMPLETED },
+      });
       this.logger.log(`Tournament ended: ${t.id}`);
-      
+
       // Calculate final ranks
       const players = await this.prisma.tournamentPlayer.findMany({
         where: { tournamentId: t.id },
         orderBy: { score: 'desc' },
       });
-      
+
       for (let i = 0; i < players.length; i++) {
         await this.prisma.tournamentPlayer.update({
           where: { id: players[i].id },
