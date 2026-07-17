@@ -36,4 +36,19 @@ export class AnalysisController {
   async getAnalysis(@Param('id') id: string) {
     return this.analysisService.analyzeGame(id);
   }
+
+  @AllowAnonymous()
+  @Get(':id/coach')
+  async getCoachAnalysis(@Param('id') id: string) {
+    // This is a mocked LLM script generator for the game.
+    // In a real scenario, this would query an LLM provider with the game's PGN.
+    return {
+      script: [
+        { fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", text: "Welcome to your post-game review. Let's see how you did.", audioUrl: null },
+        { fen: "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2", text: "You started with a strong classical opening.", audioUrl: null },
+        { fen: "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2", text: "Developing the Bishop to C4 puts pressure on the center.", audioUrl: null },
+        { fen: "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 2 3", text: "But you blundered the knight later. Let's work on your tactical vision.", audioUrl: null }
+      ]
+    };
+  }
 }

@@ -380,3 +380,11 @@ model Faction {
   users       User[]
 }
 
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     String
+  message   String
+  meta      Json?
+  createdAt DateTime @default(now())
+}

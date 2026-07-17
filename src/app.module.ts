@@ -23,6 +23,9 @@ import { QuestsModule } from './quests/quests.module';
 import { FactionsModule } from './factions/factions.module';
 import { AntiCheatModule } from './anti-cheat/anti-cheat.module';
 import { StreamerModule } from './streamer/streamer.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { ObservabilityModule } from './observability/observability.module';
 
 @Module({
   imports: [
@@ -41,6 +44,10 @@ import { StreamerModule } from './streamer/streamer.module';
         },
       }),
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
     MailModule,
     AuthModule.forRootAsync({
       imports: [PrismaModule, MailModule, ConfigModule],
@@ -68,8 +75,15 @@ import { StreamerModule } from './streamer/streamer.module';
     FactionsModule,
     AntiCheatModule,
     StreamerModule,
+    ObservabilityModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    }
+  ],
 })
 export class AppModule {}
