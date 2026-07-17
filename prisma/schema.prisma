@@ -98,6 +98,7 @@ model User {
   receivedMessages   Message[] @relation("ReceivedMessages")
   
   studies            Study[]
+  quests             UserQuest[]
 }
 
 model Session {
@@ -345,5 +346,20 @@ model StudyChapter {
   updatedAt   DateTime @updatedAt
 
   study       Study    @relation(fields: [studyId], references: [id], onDelete: Cascade)
+}
+
+model UserQuest {
+  id          String   @id @default(uuid())
+  userId      String
+  questId     String   // e.g. "WIN_3_RAPID", "SOLVE_5_PUZZLES"
+  progress    Int      @default(0)
+  target      Int      
+  completed   Boolean  @default(false)
+  expiresAt   DateTime // Defines when the daily quest resets
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, questId, expiresAt])
 }
 

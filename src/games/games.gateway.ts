@@ -18,6 +18,7 @@ import { ResetGameDto } from './dtos/reset-game.dto';
 import { JoinQueueDto } from './dtos/join-queue.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TournamentsService } from '../tournaments/tournaments.service';
+import { QuestsService } from '../quests/quests.service';
 import type { AuthenticatedSocket } from '../types';
 import { Chess } from 'chess.js';
 import {
@@ -162,10 +163,11 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   constructor(
-    private readonly gamesService: GamesService,
     private readonly matchmakingService: MatchmakingService,
+    private readonly gamesService: GamesService,
     private readonly prisma: PrismaService,
     private readonly tournamentsService: TournamentsService,
+    private readonly questsService: QuestsService,
   ) {
     this.matchmakingService.registerMatchCallback((match) => {
       this.handleMatchFound(match);
@@ -431,6 +433,13 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 gameWinner,
               );
             }
+
+            // Quests Integration
+            if (outcome === 1.0) {
+              await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
+            } else if (outcome === 0.0) {
+              await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
+            }
           }
         }
       } catch {
@@ -514,6 +523,13 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
             blackUserId,
             gameWinner,
           );
+        }
+
+        // Quests Integration
+        if (outcome === 1.0) {
+          await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
+        } else if (outcome === 0.0) {
+          await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
         }
       }
     } catch {

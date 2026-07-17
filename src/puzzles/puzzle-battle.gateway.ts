@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
+import { QuestsService } from '../quests/quests.service';
 import type { AuthenticatedSocket } from '../types';
 
 interface BattlePlayer {
@@ -40,7 +41,10 @@ export class PuzzleBattleGateway
   private queue: BattlePlayer[] = [];
   private rooms: Record<string, BattleRoom> = {};
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly questsService: QuestsService,
+  ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
     let sessionToken = (client.handshake.auth as Record<string, unknown>)
@@ -193,6 +197,20 @@ export class PuzzleBattleGateway
         });
 
         room.roundIndex += 1;
+
+        if (player.score === 3) {
+          room.status = 'FINISHED';
+          const winnerId = player.id;
+          const loserId = Object.values(room.players).find(p => p.id !== winnerId)?.id;
+
+          if (winnerId) {
+            this.questsService.incrementQuestProgress(winnerId, 'WIN_PUZZLE_BATTLE').catch(() => {});
+            this.questsService.incrementQuestProgress(winnerId, 'PLAY_BATTLES').catch(() => {});
+          }
+          if (loserId) {
+            this.questsService.incrementQuestProgress(loserId, 'PLAY_BATTLES').catch(() => {});
+          }
+        }
       }
     }
   }

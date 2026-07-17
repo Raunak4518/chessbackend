@@ -19,6 +19,7 @@ import { AnalysisModule } from './analysis/analysis.module';
 import { SocialModule } from './social/social.module';
 import { PuzzlesModule } from './puzzles/puzzles.module';
 import { StudiesModule } from './studies/studies.module';
+import { QuestsModule } from './quests/quests.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { StudiesModule } from './studies/studies.module';
     SocialModule,
     PuzzlesModule,
     StudiesModule,
+    QuestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

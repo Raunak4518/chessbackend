@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { QuestsService } from '../quests/quests.service';
 
 @Injectable()
 export class PuzzlesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private questsService: QuestsService,
+  ) {}
 
   async getRatedPuzzle(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -140,6 +144,10 @@ export class PuzzlesService {
         ratingDiff: ratingChange,
       },
     });
+
+    if (success) {
+      await this.questsService.incrementQuestProgress(userId, 'SOLVE_PUZZLES').catch(() => {});
+    }
 
     return {
       newRating: updatedUser.ratingPuzzle,
