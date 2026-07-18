@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class MakeMoveDto {
   @IsString()
@@ -14,6 +14,6 @@ export class MakeMoveDto {
   to: string;
 
   @IsString()
-  @IsNotEmpty()
-  fen: string;
+  @IsOptional()
+  promotion?: string;
 }

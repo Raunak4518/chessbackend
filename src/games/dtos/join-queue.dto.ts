@@ -10,4 +10,8 @@ export class JoinQueueDto {
   @IsString()
   @IsOptional()
   timeControl?: string;
+
+  @IsString()
+  @IsOptional()
+  targetHexId?: string;
 }

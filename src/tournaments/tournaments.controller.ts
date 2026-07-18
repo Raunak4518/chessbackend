@@ -10,6 +10,8 @@ import {
 import { TournamentsService } from './tournaments.service';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import type { AuthenticatedRequest } from '../types';
+import { CreateArenaDto } from './dto/tournaments.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('api/tournaments')
 export class TournamentsController {
@@ -29,25 +31,21 @@ export class TournamentsController {
 
   @Post(':id/join')
   async joinTournament(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') tournamentId: string,
   ) {
-    const userId = req.user?.id || (req.query?.userId as string);
     if (!userId) throw new UnauthorizedException('Not logged in');
     return this.tournamentsService.joinTournament(userId, tournamentId);
   }
 
-  // Admin or testing endpoint
   @Post('create-arena')
   async createArena(
-    @Body()
-    body: {
-      name: string;
-      timeControl: string;
-      durationMinutes: number;
-      startsInMinutes: number;
-    },
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateArenaDto,
   ) {
+    if (!req.user || req.user.email !== 'admin@chessing.local') {
+      throw new UnauthorizedException('Only administrators can create arenas');
+    }
     const startTime = new Date(Date.now() + body.startsInMinutes * 60000);
     return this.tournamentsService.createArena(
       body.name,

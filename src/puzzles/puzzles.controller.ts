@@ -9,28 +9,24 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { PuzzlesService } from './puzzles.service';
-import type { AuthenticatedRequest } from '../types';
-import { AddPuzzleCommentDto } from './dto/puzzles.dto';
+import { AddPuzzleCommentDto, SubmitPuzzleResultDto, CustomPuzzlesQueryDto, RushBatchQueryDto } from './dto/puzzles.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('api/puzzles')
 export class PuzzlesController {
   constructor(private readonly puzzlesService: PuzzlesService) {}
 
   @Get('rated')
-  async getRatedPuzzle(@Req() req: AuthenticatedRequest) {
-    const userId = req.user?.id || (req.query?.userId as string);
+  async getRatedPuzzle(@CurrentUser() userId: string) {
     if (!userId) throw new UnauthorizedException('Not logged in');
     return this.puzzlesService.getRatedPuzzle(userId);
   }
 
   @Get('custom')
-  async getCustomPuzzles(
-    @Query('theme') theme: string,
-    @Query('limit') limit: string,
-  ) {
+  async getCustomPuzzles(@Query() query: CustomPuzzlesQueryDto) {
     return this.puzzlesService.getCustomPuzzles(
-      theme || 'endgame',
-      Number(limit) || 10,
+      query.theme || 'endgame',
+      Number(query.limit) || 10,
     );
   }
 
@@ -40,22 +36,21 @@ export class PuzzlesController {
   }
 
   @Get('rush')
-  async getRushBatch(@Query('limit') limit: string) {
-    return this.puzzlesService.getBatchForRush(Number(limit) || 20);
+  async getRushBatch(@Query() query: RushBatchQueryDto) {
+    return this.puzzlesService.getBatchForRush(Number(query.limit) || 20);
   }
 
   @Post('rated/:id/result')
   async submitPuzzleResult(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
-    @Body() body: { success: boolean; timeTaken: number; userId?: string },
+    @Body() body: SubmitPuzzleResultDto,
   ) {
-    const userId = req.user?.id || body.userId;
     if (!userId) throw new UnauthorizedException('Not logged in');
     return this.puzzlesService.submitAttempt(
       userId,
       id,
-      body.success,
+      body.movesMade || [],
       body.timeTaken || 0,
     );
   }
@@ -67,11 +62,10 @@ export class PuzzlesController {
 
   @Post('daily/:id/comments')
   async addDailyPuzzleComment(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
     @Body() body: AddPuzzleCommentDto,
   ) {
-    const userId = req.user?.id;
     if (!userId) throw new UnauthorizedException('Not logged in');
     return this.puzzlesService.addDailyPuzzleComment(userId, id, body.content);
   }

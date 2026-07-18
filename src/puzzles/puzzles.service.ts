@@ -1,13 +1,26 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuestsService } from '../quests/quests.service';
+import Redis from 'ioredis';
 
 @Injectable()
-export class PuzzlesService {
+export class PuzzlesService implements OnModuleDestroy {
+  private redisClient: Redis;
+
   constructor(
     private prisma: PrismaService,
     private questsService: QuestsService,
-  ) {}
+  ) {
+    this.redisClient = new Redis({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: Number(process.env.REDIS_PORT) || 6379,
+      db: Number(process.env.PUZZLES_REDIS_DB) || 2,
+    });
+  }
+
+  onModuleDestroy() {
+    this.redisClient.disconnect();
+  }
 
   async getRatedPuzzle(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -15,8 +28,8 @@ export class PuzzlesService {
 
     const userRating = user.ratingPuzzle;
 
-    // Find a puzzle close to the user's rating that they haven't attempted yet
-    const puzzle = await this.prisma.puzzle.findFirst({
+
+    let puzzle = await this.prisma.puzzle.findFirst({
       where: {
         rating: {
           gte: userRating - 200,
@@ -29,13 +42,12 @@ export class PuzzlesService {
         },
       },
       orderBy: {
-        rating: 'asc', // simple tie breaker
+        rating: 'asc',
       },
     });
 
     if (!puzzle) {
-      // Fallback: just return a random puzzle if they've solved all in range
-      return this.prisma.puzzle.findFirst({
+      puzzle = await this.prisma.puzzle.findFirst({
         where: {
           puzzleAttempts: {
             none: {
@@ -44,8 +56,13 @@ export class PuzzlesService {
           },
         },
       });
+      if (!puzzle) {
+        return null; // Or throw NotFoundException
+      }
     }
 
+    // Record timestamp for validation
+    await this.redisClient.set(`puzzle_start:${userId}:${puzzle.id}`, Date.now().toString(), 'EX', 3600);
     return puzzle;
   }
 
@@ -70,7 +87,7 @@ export class PuzzlesService {
     });
 
     if (!daily) {
-      // Create one if it doesn't exist for today
+
       const randomPuzzle = await this.prisma.puzzle.findFirst();
       if (!randomPuzzle) throw new NotFoundException('No puzzles in DB');
 
@@ -87,17 +104,21 @@ export class PuzzlesService {
   }
 
   async getBatchForRush(limit = 20) {
-    // Return a progressively harder batch of puzzles for Puzzle Rush
-    return this.prisma.puzzle.findMany({
+
+    const batch = await this.prisma.puzzle.findMany({
       orderBy: { rating: 'asc' },
       take: limit,
     });
+    // This endpoint is used for rush, so it doesn't map directly to a single start time per puzzle here.
+    // The client would need to report when they start each puzzle, or the server validates the whole batch time.
+    // For now, we'll return the batch.
+    return batch;
   }
 
   async submitAttempt(
     userId: string,
     puzzleId: string,
-    success: boolean,
+    movesMade: string[],
     timeSpentMs: number,
   ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -108,7 +129,28 @@ export class PuzzlesService {
     if (!user || !puzzle)
       throw new NotFoundException('User or Puzzle not found');
 
-    // Simplified Elo calculation
+    const startTimestampStr = await this.redisClient.get(`puzzle_start:${userId}:${puzzle.id}`);
+    
+    // Server-side timing validation
+    if (!startTimestampStr) {
+      throw new BadRequestException('Puzzle session not found or expired. Please start the puzzle through the proper endpoint.');
+    }
+
+    const startTimestamp = parseInt(startTimestampStr, 10);
+    const actualTimeSpentMs = Date.now() - startTimestamp;
+
+    // Minimum sensible time (e.g., 500ms per move in the puzzle)
+    const minPossibleTime = (puzzle.moves.length / 2) * 500;
+    
+    if (actualTimeSpentMs < minPossibleTime) {
+      throw new BadRequestException('Puzzle solved impossibly fast. Attempt rejected.');
+    }
+
+    // Cleanup session
+    await this.redisClient.del(`puzzle_start:${userId}:${puzzle.id}`);
+
+    const success = JSON.stringify(movesMade) === JSON.stringify(puzzle.moves);
+
     const expectedScore =
       1 / (1 + Math.pow(10, (puzzle.rating - user.ratingPuzzle) / 400));
     const actualScore = success ? 1 : 0;
@@ -121,7 +163,7 @@ export class PuzzlesService {
       data: { ratingPuzzle: Math.max(100, user.ratingPuzzle + ratingChange) },
     });
 
-    // Also update puzzle rating slightly (e.g. K=16 for puzzles)
+
     const pRatingChange = Math.round(
       16 * (1 - actualScore - (1 - expectedScore)),
     );

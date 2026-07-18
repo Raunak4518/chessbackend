@@ -21,6 +21,8 @@ import { TournamentsService } from '../tournaments/tournaments.service';
 import { QuestsService } from '../quests/quests.service';
 import { FactionsService } from '../factions/factions.service';
 import { AntiCheatProducer } from '../anti-cheat/anti-cheat.producer';
+import { OverworldService } from '../overworld/overworld.service';
+import { OverworldGateway } from '../overworld/overworld.gateway';
 import type { AuthenticatedSocket } from '../types';
 import { Chess } from 'chess.js';
 import {
@@ -172,6 +174,8 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly questsService: QuestsService,
     private readonly factionsService: FactionsService,
     private readonly antiCheatProducer: AntiCheatProducer,
+    private readonly overworldService: OverworldService,
+    private readonly overworldGateway: OverworldGateway,
   ) {
     this.matchmakingService.registerMatchCallback((match) => {
       this.handleMatchFound(match);
@@ -231,28 +235,91 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  private handleMatchFound(match: MatchResult) {
+  private async processAethelgardVictory(
+    winnerUserId: string,
+    loserUserId: string,
+    targetHexId?: string,
+  ) {
+    // 1. Give economy rewards
+    await this.prisma.playerInventory.updateMany({
+      where: { userId: winnerUserId },
+      data: { gold: { increment: 10 }, aetherium: { increment: 5 } },
+    }).catch(() => {});
+    
+    await this.prisma.playerInventory.updateMany({
+      where: { userId: loserUserId },
+      data: { gold: { increment: 2 } },
+    }).catch(() => {});
+
+    // 2. Handle Hex Flipping
+    if (targetHexId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: winnerUserId },
+        select: { factionId: true },
+      });
+      if (user && user.factionId) {
+        const updatedHex = await this.prisma.worldHex.update({
+          where: { id: targetHexId },
+          data: { controllingFactionId: user.factionId },
+          include: { controllingFaction: true, structures: true },
+        });
+        
+        // Update Redis Cache
+        await this.overworldService.cacheWorldMap();
+        
+        // Broadcast via OverworldGateway
+        this.overworldGateway.server.emit('hexUpdated', updatedHex);
+      }
+    }
+  }
+
+  private async handleMatchFound(match: MatchResult) {
     const whiteSocket = this.server.sockets.sockets.get(match.white);
     const blackSocket = this.server.sockets.sockets.get(match.black);
 
     // Security & Race Condition Check: Ensure both players are still connected
     if (!whiteSocket || !blackSocket) {
-      if (whiteSocket) this.matchmakingService.joinQueue(match.white, 1200, match.timeControl, match.gameType, match.tournamentId); // Fallback rating
-      if (blackSocket) this.matchmakingService.joinQueue(match.black, 1200, match.timeControl, match.gameType, match.tournamentId);
+      if (whiteSocket) {
+        const fields = getPlayerRatingField(match.gameType);
+        const rating = (whiteSocket as AuthenticatedSocket).data?.user
+          ? (((whiteSocket as AuthenticatedSocket).data.user![fields.rating] as number) ?? 1200)
+          : 1200;
+        this.matchmakingService.joinQueue(match.white, rating, match.timeControl, match.gameType, match.tournamentId, match.targetHexId);
+      }
+      if (blackSocket) {
+        const fields = getPlayerRatingField(match.gameType);
+        const rating = (blackSocket as AuthenticatedSocket).data?.user
+          ? (((blackSocket as AuthenticatedSocket).data.user![fields.rating] as number) ?? 1200)
+          : 1200;
+        this.matchmakingService.joinQueue(match.black, rating, match.timeControl, match.gameType, match.tournamentId, match.targetHexId);
+      }
       return;
     }
 
-    this.gamesService.createRoom(
+    const wFields = getPlayerRatingField(match.gameType);
+    const bFields = getPlayerRatingField(match.gameType);
+
+    await this.gamesService.createRoom(
       match.roomName,
-      match.white,
+      wSocket.id,
       match.timeControl,
       match.gameType,
       match.tournamentId,
+      match.targetHexId,
+      wSocket.data?.user?.id,
+      wSocket.data?.user?.name,
+      wSocket.data?.user ? (wSocket.data.user[wFields.rating] as number) : undefined
     );
-    const room = this.gamesService.joinRoom(match.roomName, match.black);
+
+    const room = this.gamesService.joinRoom(
+      match.roomName,
+      bSocket.id,
+      bSocket.data?.user?.id,
+      bSocket.data?.user?.name,
+      bSocket.data?.user ? (bSocket.data.user[bFields.rating] as number) : undefined
+    );
 
     if (room) {
-
       if (whiteSocket) {
         void whiteSocket.join(match.roomName);
         whiteSocket.emit('roomJoined', { color: 'w', room: match.roomName });
@@ -284,6 +351,8 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
         gameType: room.gameType,
         white: getProfile(room.whitePlayerId),
         black: getProfile(room.blackPlayerId),
+        whiteTimeLeftMs: room.whiteTimeLeftMs,
+        blackTimeLeftMs: room.blackTimeLeftMs,
       });
     }
   }
@@ -306,6 +375,8 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       userRating,
       parsed.timeControl,
       parsed.gameType,
+      undefined, // tournamentId
+      data.targetHexId,
     );
     client.emit('queueJoined');
   }
@@ -340,24 +411,56 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('joinRoom')
-  handleJoinRoom(
+  async handleJoinRoom(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: JoinRoomDto,
   ) {
     const roomName = data.room;
     const existing = this.gamesService.getRoom(roomName);
 
+    const userRating = client.data.user
+      ? (client.data.user[getPlayerRatingField('RAPID').rating] as number ?? 1200)
+      : 1200;
+
     if (!existing) {
-      this.gamesService.createRoom(roomName, client.id);
+      await this.gamesService.createRoom(
+        roomName, 
+        client.id, 
+        '10|0', 
+        'RAPID', 
+        undefined, 
+        undefined, 
+        client.data?.user?.id, 
+        client.data?.user?.name, 
+        userRating
+      );
       void client.join(roomName);
       client.emit('roomJoined', { color: 'w', room: roomName });
     } else if (existing.players.length === 1) {
-      const room = this.gamesService.joinRoom(roomName, client.id);
+      const room = this.gamesService.joinRoom(
+        roomName, 
+        client.id, 
+        client.data?.user?.id, 
+        client.data?.user?.name, 
+        userRating
+      );
       if (room) {
         void client.join(roomName);
         client.emit('roomJoined', { color: 'b', room: roomName });
 
-        const getProfile = (socketId: string) => {
+        const getProfile = (socketId: string, color: 'w' | 'b') => {
+          const uId = color === 'w' ? room.whiteUserId : room.blackUserId;
+          const uName = color === 'w' ? room.whitePlayerName : room.blackPlayerName;
+          const uRating = color === 'w' ? room.whiteRating : room.blackRating;
+          
+          if (uId) {
+            return {
+              id: uId,
+              name: uName ?? `Guest-${socketId.slice(0, 5)}`,
+              rating: uRating ?? 1200,
+            };
+          }
+
           const socket = this.server.sockets.sockets.get(socketId) as
             | AuthenticatedSocket
             | undefined;
@@ -375,12 +478,58 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
           fen: room.fen,
           timeControl: room.timeControl,
           gameType: room.gameType,
-          white: getProfile(room.whitePlayerId),
-          black: getProfile(room.blackPlayerId),
+          white: getProfile(room.whitePlayerId, 'w'),
+          black: getProfile(room.blackPlayerId, 'b'),
+          whiteTimeLeftMs: room.whiteTimeLeftMs,
+          blackTimeLeftMs: room.blackTimeLeftMs,
         });
       }
     } else {
       client.emit('roomFull');
+    }
+  }
+
+  @SubscribeMessage('rejoinRoom')
+  handleRejoinRoom(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { room: string },
+  ) {
+    const room = this.gamesService.getRoom(data.room);
+    if (!room) {
+      client.emit('error', 'Room not found');
+      return;
+    }
+    const userId = client.data?.user?.id;
+    if (!userId) return;
+
+    if (room.whiteUserId === userId || room.blackUserId === userId) {
+      void client.join(data.room);
+      const color = room.whiteUserId === userId ? 'w' : 'b';
+      
+      // Update socket ID mapping
+      if (color === 'w') {
+        room.whitePlayerId = client.id;
+      } else {
+        room.blackPlayerId = client.id;
+      }
+      if (!room.players.includes(client.id)) {
+        room.players.push(client.id);
+      }
+
+      client.emit('roomJoined', { color, room: data.room });
+      
+      const now = Date.now();
+      const turn = room.fen.split(' ')[1];
+      const wElapsed = turn === 'w' && room.lastMoveTimestamp ? now - room.lastMoveTimestamp : 0;
+      const bElapsed = turn === 'b' && room.lastMoveTimestamp ? now - room.lastMoveTimestamp : 0;
+      
+      client.emit('gameStart', {
+        white: { id: room.whiteUserId, name: room.whitePlayerName, rating: room.whiteRating },
+        black: { id: room.blackUserId, name: room.blackPlayerName, rating: room.blackRating },
+        whiteTimeLeftMs: Math.max(0, room.whiteTimeLeftMs - wElapsed),
+        blackTimeLeftMs: Math.max(0, room.blackTimeLeftMs - bElapsed),
+        fen: room.fen,
+      });
     }
   }
 
@@ -396,16 +545,59 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    const updated = this.gamesService.updateFen(data.room, data.fen);
-    if (updated) {
-      client.to(data.room).emit('opponentMove', {
-        from: data.from,
-        to: data.to,
-        fen: data.fen,
-      });
+    const chess = new Chess(room.fen);
+    
+    const isWhiteTurn = chess.turn() === 'w';
+    if (isWhiteTurn && client.id !== room.whitePlayerId) return;
+    if (!isWhiteTurn && client.id !== room.blackPlayerId) return;
+
+    // Terrain & Obstacle mechanics (Aethelgard)
+    if (room.obstacles?.includes(data.to)) {
+      // Reject move because square is blocked by terrain (e.g. Mountain / Volcano debris)
+      return;
+    }
+
+    try {
+      const move = chess.move({ from: data.from, to: data.to, promotion: data.promotion });
+      if (!move) return;
+    } catch (e) {
+      return;
+    }
+
+      const now = Date.now();
+      const elapsed = now - room.lastMoveTimestamp;
+      
+      let whiteTimeLeft = room.whiteTimeLeftMs;
+      let blackTimeLeft = room.blackTimeLeftMs;
+
+      if (isWhiteTurn) {
+        whiteTimeLeft -= elapsed;
+        if (whiteTimeLeft < 0) return; // Client timed out, server rejected the move
+        whiteTimeLeft += room.incrementMs;
+        room.whiteTimeLeftMs = whiteTimeLeft;
+      } else {
+        blackTimeLeft -= elapsed;
+        if (blackTimeLeft < 0) return; // Client timed out, server rejected the move
+        blackTimeLeft += room.incrementMs;
+        room.blackTimeLeftMs = blackTimeLeft;
+      }
+      
+      room.lastMoveTimestamp = now;
+
+      const newFen = chess.fen();
+      const updated = this.gamesService.updateFen(data.room, newFen);
+      
+      if (updated) {
+        client.to(data.room).emit('opponentMove', {
+          from: data.from,
+          to: data.to,
+          promotion: data.promotion,
+          fen: newFen,
+          whiteTimeLeftMs: room.whiteTimeLeftMs,
+          blackTimeLeftMs: room.blackTimeLeftMs,
+        });
 
       try {
-        const chess = new Chess(data.fen);
         if (chess.isGameOver()) {
           let outcome = 0.5;
           if (chess.isCheckmate()) {
@@ -454,9 +646,11 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
             if (outcome === 1.0) {
               await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
               await this.factionsService.incrementFactionScoreForUser(whiteUserId, 15).catch(() => {});
+              await this.processAethelgardVictory(whiteUserId, blackUserId, room.targetHexId);
             } else if (outcome === 0.0) {
               await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
               await this.factionsService.incrementFactionScoreForUser(blackUserId, 15).catch(() => {});
+              await this.processAethelgardVictory(blackUserId, whiteUserId, room.targetHexId);
             }
 
             // Anti-cheat background processing
@@ -474,8 +668,23 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage('undoMove')
-  handleUndoMove(
+  @SubscribeMessage('requestUndo')
+  handleRequestUndo(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: { room: string }) {
+    client.to(data.room).emit('undoRequested');
+  }
+
+  @SubscribeMessage('acceptUndo')
+  handleAcceptUndo(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: { room: string }) {
+    client.to(data.room).emit('undoAccepted');
+  }
+
+  @SubscribeMessage('declineUndo')
+  handleDeclineUndo(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: { room: string }) {
+    client.to(data.room).emit('undoDeclined');
+  }
+
+  @SubscribeMessage('executeUndo')
+  handleExecuteUndo(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: UndoMoveDto,
   ) {
@@ -489,6 +698,21 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('requestRematch')
+  handleRequestRematch(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: { room: string }) {
+    client.to(data.room).emit('rematchRequested');
+  }
+
+  @SubscribeMessage('acceptRematch')
+  handleAcceptRematch(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: { room: string }) {
+    this.server.to(data.room).emit('rematchAccepted');
+  }
+
+  @SubscribeMessage('declineRematch')
+  handleDeclineRematch(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: { room: string }) {
+    client.to(data.room).emit('rematchDeclined');
+  }
+
   @SubscribeMessage('resetGame')
   handleResetGame(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -497,6 +721,81 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const nextFen = this.gamesService.resetRoom(data.room);
     if (nextFen) {
       this.server.to(data.room).emit('gameReset', { fen: nextFen });
+    }
+  }
+
+  @SubscribeMessage('claimTimeout')
+  async handleClaimTimeout(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: ResetGameDto, // Reusing ResetGameDto for its 'room' property
+  ) {
+    const room = this.gamesService.getRoom(data.room);
+    if (!room) return;
+
+    if (client.id !== room.whitePlayerId && client.id !== room.blackPlayerId) {
+      return;
+    }
+
+    const chess = new Chess(room.fen);
+    if (chess.isGameOver()) return;
+
+    const isWhiteTurn = chess.turn() === 'w';
+    const activePlayerTimeLeft = isWhiteTurn ? room.whiteTimeLeftMs : room.blackTimeLeftMs;
+    const elapsed = Date.now() - room.lastMoveTimestamp;
+
+    // Check if the opponent actually ran out of time
+    // Allow a small grace period (e.g. 500ms) for network latency
+    if (elapsed > activePlayerTimeLeft + 500) {
+      // The active player timed out
+      // Determine winner (the one claiming the timeout is the winner if they are not the active player)
+      const outcome = isWhiteTurn ? 1.0 : 0.0; // Wait, if white timed out, black wins (outcome 1.0 means black wins? No, usually 1.0 means white wins. Let's look at resign).
+      
+      // In resign: client.id === room.whitePlayerId ? 0.0 : 1.0
+      // So 0.0 means black wins, 1.0 means white wins.
+      // If white timed out, black wins -> outcome = 0.0
+      // If black timed out, white wins -> outcome = 1.0
+      const finalOutcome = isWhiteTurn ? 0.0 : 1.0;
+      
+      this.server.to(data.room).emit('gameTimeout', {
+        winner: isWhiteTurn ? 'black' : 'white',
+      });
+
+      try {
+        const movesCount = chess.history().length;
+        const whiteSocket = this.server.sockets.sockets.get(room.whitePlayerId) as AuthenticatedSocket | undefined;
+        const blackSocket = this.server.sockets.sockets.get(room.blackPlayerId) as AuthenticatedSocket | undefined;
+
+        const whiteUserId = whiteSocket?.data?.user?.id;
+        const blackUserId = blackSocket?.data?.user?.id;
+
+        if (whiteUserId && blackUserId && whiteUserId !== room.whitePlayerId && blackUserId !== room.blackPlayerId) {
+          await updateRatingsOnNest(this.prisma, whiteUserId, blackUserId, room.gameType, finalOutcome, movesCount);
+
+          if (room.tournamentId) {
+            const gameWinner = finalOutcome === 1.0 ? 'WHITE' : finalOutcome === 0.0 ? 'BLACK' : 'DRAW';
+            await this.tournamentsService.recordGameResult(room.tournamentId, whiteUserId, blackUserId, gameWinner);
+          }
+
+          if (finalOutcome === 1.0) {
+            await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
+            await this.factionsService.incrementFactionScoreForUser(whiteUserId, 15).catch(() => {});
+            await this.processAethelgardVictory(whiteUserId, blackUserId, room.targetHexId);
+          } else if (finalOutcome === 0.0) {
+            await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
+            await this.factionsService.incrementFactionScoreForUser(blackUserId, 15).catch(() => {});
+            await this.processAethelgardVictory(blackUserId, whiteUserId, room.targetHexId);
+          }
+
+          this.antiCheatProducer.analyzeGame({
+            gameId: data.room,
+            whitePlayerId: whiteUserId,
+            blackPlayerId: blackUserId,
+            pgn: chess.pgn(),
+          }).catch(err => console.error('Failed to queue anti-cheat job', err));
+        }
+      } catch {
+        // Ignored
+      }
     }
   }
 
@@ -559,9 +858,11 @@ export class GamesGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (outcome === 1.0) {
           await this.questsService.incrementQuestProgress(whiteUserId, 'WIN_GAMES');
           await this.factionsService.incrementFactionScoreForUser(whiteUserId, 15).catch(() => {});
+          await this.processAethelgardVictory(whiteUserId, blackUserId, room.targetHexId);
         } else if (outcome === 0.0) {
           await this.questsService.incrementQuestProgress(blackUserId, 'WIN_GAMES');
           await this.factionsService.incrementFactionScoreForUser(blackUserId, 15).catch(() => {});
+          await this.processAethelgardVictory(blackUserId, whiteUserId, room.targetHexId);
         }
 
         // Anti-cheat background processing

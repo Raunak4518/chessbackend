@@ -1,0 +1,101 @@
+[
+  {
+    "id": "46491dd0-6cf4-4e10-8a44-16d2ac1839c1",
+    "fen": "8/8/8/8/8/5k2/8/4R1K1 w - - 0 1",
+    "moves": [
+      "e1f1"
+    ],
+    "rating": 530,
+    "themes": [
+      "random"
+    ],
+    "attempts": 0,
+    "successes": 0,
+    "createdAt": "2026-07-17T19:33:26.051Z"
+  },
+  {
+    "id": "f40acdc8-e107-495b-9d90-415bf4c56c99",
+    "fen": "8/8/8/8/8/5k2/8/4R1K1 w - - 0 1",
+    "moves": [
+      "e1f1"
+    ],
+    "rating": 552,
+    "themes": [
+      "random"
+    ],
+    "attempts": 0,
+    "successes": 0,
+    "createdAt": "2026-07-17T19:33:26.051Z"
+  },
+  {
+    "id": "02a38a80-84cc-417d-8738-2c2793dfb247",
+    "fen": "8/8/8/8/8/5k2/8/4R1K1 w - - 0 1",
+    "moves": [
+      "e1f1"
+    ],
+    "rating": 563,
+    "themes": [
+      "random"
+    ],
+    "attempts": 0,
+    "successes": 0,
+    "createdAt": "2026-07-17T19:33:26.051Z"
+  },
+  {
+    "id": "53cd072e-9770-4c0c-8834-2d3ebee60f4e",
+    "fen": "8/8/8/8/8/5k2/8/4R1K1 w - - 0 1",
+    "moves": [
+      "e1f1"
+    ],
+    "rating": 575,
+    "themes": [
+      "random"
+    ],
+    "attempts": 0,
+    "successes": 0,
+    "createdAt": "2026-07-17T19:33:26.051Z"
+  },
+  {
+    "id": "1553f0c7-4a99-4031-aa72-c7f246652fa4",
+    "fen": "8/8/8/8/8/5k2/8/4R1K1 w - - 0 1",
+    "moves": [
+      "e1f1"
+    ],
+    "rating": 596,
+    "themes": [
+      "random"
+    ],
+    "attempts": 0,
+    "successes": 0,
+    "createdAt": "2026-07-17T19:33:26.051Z"
+  },
+  {
+    "id": "cff90736-7f29-4186-bfd0-4e7a13cd0e7a",
+    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1KBNR w KQkq - 4 4",
+    "moves": [
+      "f3f7"
+    ],
+    "rating": 600,
+    "themes": [
+      "mateIn1",
+      "scholarsMate"
+    ],
+    "attempts": 0,
+    "successes": 0,
+    "createdAt": "2026-07-17T19:33:26.051Z"
+  },
+  {
+    "id": "56302d2d-6c62-41e1-99df-c26af7c0435b",
+    "fen": "8/8/8/8/8/5k2/8/4R1K1 w - - 0 1",
+    "moves": [
+      "e1f1"
+    ],
+    "rating": 624,
+    "themes": [
+      "random"
+    ],
+    "attempts": 0,
+    "successes": 0,
+    "createdAt": "2026-07-17T19:33:26.051Z"
+  }
+]

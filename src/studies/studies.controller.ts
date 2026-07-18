@@ -10,17 +10,13 @@ import {
 } from '@nestjs/common';
 import { StudiesService } from './studies.service';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
-import type { AuthenticatedRequest } from '../types';
+import { CreateStudyDto, AddChapterDto, UpdateChapterDto } from './dto/studies.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('api/studies')
 export class StudiesController {
   constructor(private readonly studiesService: StudiesService) {}
 
-  private getUserId(req: AuthenticatedRequest): string {
-    const userId = req.user?.id || (req.query?.userId as string);
-    if (!userId) throw new UnauthorizedException('Not logged in');
-    return userId;
-  }
 
   @AllowAnonymous()
   @Get()
@@ -29,8 +25,9 @@ export class StudiesController {
   }
 
   @Get('my')
-  async getMyStudies(@Req() req: AuthenticatedRequest) {
-    return this.studiesService.getMyStudies(this.getUserId(req));
+  async getMyStudies(@CurrentUser() userId: string) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.studiesService.getMyStudies(userId);
   }
 
   @AllowAnonymous()
@@ -41,11 +38,12 @@ export class StudiesController {
 
   @Post()
   async createStudy(
-    @Req() req: AuthenticatedRequest,
-    @Body() body: { title: string; description?: string; isPublic?: boolean },
+    @CurrentUser() userId: string,
+    @Body() body: CreateStudyDto,
   ) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
     return this.studiesService.createStudy(
-      this.getUserId(req),
+      userId,
       body.title,
       body.description,
       body.isPublic,
@@ -54,12 +52,13 @@ export class StudiesController {
 
   @Post(':id/chapters')
   async addChapter(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') studyId: string,
-    @Body() body: { title: string },
+    @Body() body: AddChapterDto,
   ) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
     return this.studiesService.addChapter(
-      this.getUserId(req),
+      userId,
       studyId,
       body.title,
     );
@@ -67,13 +66,13 @@ export class StudiesController {
 
   @Put('chapters/:id')
   async updateChapter(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') chapterId: string,
-    @Body()
-    body: { fen?: string; pgn?: string; annotations?: unknown; title?: string },
+    @Body() body: UpdateChapterDto,
   ) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
     return this.studiesService.updateChapter(
-      this.getUserId(req),
+      userId,
       chapterId,
       body,
     );

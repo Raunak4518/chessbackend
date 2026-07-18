@@ -122,10 +122,12 @@ export class PuzzleBattleGateway
       if (p1 && p2) {
         const roomId = `battle_${p1.id}_${p2.id}`;
 
-        // Fetch 7 random puzzles for a Best of 5 (with some spares)
+        // Fetch 7 random puzzles
+        const totalPuzzles = await this.prisma.puzzle.count();
+        const skip = Math.max(0, Math.floor(Math.random() * (totalPuzzles - 7)));
         const puzzles = await this.prisma.puzzle.findMany({
           take: 7,
-          orderBy: { rating: 'asc' }, // Simplified: just grab 7 easy ones for now
+          skip: skip,
         });
 
         this.rooms[roomId] = {
@@ -193,11 +195,15 @@ export class PuzzleBattleGateway
 
   @SubscribeMessage('puzzleSolved')
   handlePuzzleSolved(
-    @MessageBody() data: { roomId: string; timeMs: number },
+    @MessageBody() data: { roomId: string; timeMs: number; roundIndex?: number },
     @ConnectedSocket() client: Socket,
   ) {
     const room = this.rooms[data.roomId];
     if (room && room.status === 'IN_PROGRESS') {
+      if (data.roundIndex !== undefined && data.roundIndex !== room.roundIndex) {
+        return; // Stale solve due to race condition
+      }
+      
       const player = room.players[client.id];
       if (player) {
         player.score += 1;
@@ -218,6 +224,11 @@ export class PuzzleBattleGateway
             (p) => p.id !== winnerId,
           )?.id;
 
+          this.server.to(data.roomId).emit('battleEnded', {
+            winnerId,
+            reason: 'score_reached'
+          });
+
           if (winnerId) {
             this.questsService.incrementQuestProgress(winnerId, 'WIN_PUZZLE_BATTLE').catch(() => {});
             this.questsService.incrementQuestProgress(winnerId, 'PLAY_BATTLES').catch(() => {});
@@ -228,6 +239,10 @@ export class PuzzleBattleGateway
               .incrementQuestProgress(loserId, 'PLAY_BATTLES')
               .catch(() => {});
           }
+
+          setTimeout(() => {
+            delete this.rooms[data.roomId];
+          }, 10000);
         }
       }
     }

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
+import { SearchUsersDto, GetRatingHistoryDto } from './dto/users.dto';
 
 @AllowAnonymous()
 @Controller('users')
@@ -14,13 +15,13 @@ export class UsersController {
   constructor(private prisma: PrismaService) {}
 
   @Get('search')
-  async searchUsers(@Query('q') query: string) {
-    if (!query || query.length < 2) return [];
+  async searchUsers(@Query() query: SearchUsersDto) {
+    if (!query.q || query.q.length < 2) return [];
 
     return this.prisma.user.findMany({
       where: {
         name: {
-          contains: query,
+          contains: query.q,
           mode: 'insensitive',
         },
       },
@@ -183,14 +184,14 @@ export class UsersController {
   @Get(':id/rating-history')
   async getRatingHistory(
     @Param('id') id: string,
-    @Query('timeframe') timeframe: string,
+    @Query() query: GetRatingHistoryDto,
   ) {
-    let dateFilter = new Date(0); // All time
-    if (timeframe === '7d')
+    let dateFilter = new Date(0);
+    if (query.timeframe === '7d')
       dateFilter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    else if (timeframe === '30d')
+    else if (query.timeframe === '30d')
       dateFilter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    else if (timeframe === '1y')
+    else if (query.timeframe === '1y')
       dateFilter = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
 
     const history = await this.prisma.ratingHistory.findMany({

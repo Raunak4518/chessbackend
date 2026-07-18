@@ -7,8 +7,10 @@ import { GamesService } from './games.service';
 import { MatchmakingService } from './matchmaking.service';
 
 import { PrismaService } from '../prisma/prisma.service';
-
-const buildMockSocket = (id: string) => ({
+import { TournamentsService } from '../tournaments/tournaments.service';
+import { QuestsService } from '../quests/quests.service';
+import { FactionsService } from '../factions/factions.service';
+import { AntiCheatProducer } from '../anti-cheat/anti-cheat.producer';
   id,
 
   handshake: { auth: {}, headers: {} },
@@ -43,11 +45,25 @@ describe('GamesGateway', () => {
 
           useValue: {
             session: { findUnique: jest.fn() },
-
             user: { findUnique: jest.fn(), update: jest.fn() },
-
             $transaction: jest.fn((promises) => Promise.all(promises)),
           },
+        },
+        {
+          provide: TournamentsService,
+          useValue: { recordGameResult: jest.fn() },
+        },
+        {
+          provide: QuestsService,
+          useValue: { incrementQuestProgress: jest.fn() },
+        },
+        {
+          provide: FactionsService,
+          useValue: { incrementFactionScoreForUser: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: AntiCheatProducer,
+          useValue: { analyzeGame: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

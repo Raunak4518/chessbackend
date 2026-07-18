@@ -15,9 +15,6 @@ export class SocialService {
     private readonly socialGateway: SocialGateway,
   ) {}
 
-  // ==========================================
-  // FRIENDS
-  // ==========================================
 
   async getFriends(userId: string) {
     const friendships = await this.prisma.friendship.findMany({
@@ -114,9 +111,7 @@ export class SocialService {
     return this.prisma.friendship.delete({ where: { id: friendshipId } });
   }
 
-  // ==========================================
-  // CHALLENGES
-  // ==========================================
+
 
   async getIncomingChallenges(userId: string) {
     return this.prisma.challenge.findMany({
@@ -172,7 +167,7 @@ export class SocialService {
       data: { status: 'ACCEPTED' },
     });
 
-    // Determine colors
+
     let whitePlayerId = challenge.senderId;
     let blackPlayerId = challenge.receiverId;
 
@@ -186,7 +181,7 @@ export class SocialService {
       }
     }
 
-    // Create the game
+
     const game = await this.prisma.game.create({
       data: {
         whitePlayerId,

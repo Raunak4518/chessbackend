@@ -9,66 +9,69 @@ import {
   Delete,
 } from '@nestjs/common';
 import { SocialService } from './social.service';
-import type { AuthenticatedRequest } from '../types';
 import { SendChallengeDto } from './dto/social.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('api/social')
 export class SocialController {
   constructor(private readonly socialService: SocialService) {}
 
-  private getUserId(req: AuthenticatedRequest): string {
-    const userId = req.user?.id || (req.query?.userId as string);
-    if (!userId) throw new UnauthorizedException('Not logged in');
-    return userId;
-  }
+
 
   @Get('friends')
-  async getFriends(@Req() req: AuthenticatedRequest) {
-    return this.socialService.getFriends(this.getUserId(req));
+  async getFriends(@CurrentUser() userId: string) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.getFriends(userId);
   }
 
   @Get('requests')
-  async getPendingRequests(@Req() req: AuthenticatedRequest) {
-    return this.socialService.getPendingRequests(this.getUserId(req));
+  async getPendingRequests(@CurrentUser() userId: string) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.getPendingRequests(userId);
   }
 
   @Post('friends/request/:id')
   async sendFriendRequest(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
   ) {
-    return this.socialService.sendFriendRequest(this.getUserId(req), id);
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.sendFriendRequest(userId, id);
   }
 
   @Post('friends/accept/:id')
   async acceptFriendRequest(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
   ) {
-    return this.socialService.acceptFriendRequest(this.getUserId(req), id);
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.acceptFriendRequest(userId, id);
   }
 
   @Delete('friends/request/:id')
   async declineFriendRequest(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
   ) {
-    return this.socialService.declineFriendRequest(this.getUserId(req), id);
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.declineFriendRequest(userId, id);
   }
 
   @Get('challenges')
-  async getIncomingChallenges(@Req() req: AuthenticatedRequest) {
-    return this.socialService.getIncomingChallenges(this.getUserId(req));
+  async getIncomingChallenges(@CurrentUser() userId: string) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.getIncomingChallenges(userId);
   }
 
   @Post('challenge/:id')
   async sendChallenge(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
     @Body() body: SendChallengeDto,
   ) {
+    if (!userId) throw new UnauthorizedException('Not logged in');
     return this.socialService.sendChallenge(
-      this.getUserId(req),
+      userId,
       id,
       body.timeControl || '10|0',
       body.colorPref || 'random',
@@ -77,17 +80,19 @@ export class SocialController {
 
   @Post('challenge/:id/accept')
   async acceptChallenge(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
   ) {
-    return this.socialService.acceptChallenge(this.getUserId(req), id);
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.acceptChallenge(userId, id);
   }
 
   @Delete('challenge/:id')
   async declineChallenge(
-    @Req() req: AuthenticatedRequest,
+    @CurrentUser() userId: string,
     @Param('id') id: string,
   ) {
-    return this.socialService.declineChallenge(this.getUserId(req), id);
+    if (!userId) throw new UnauthorizedException('Not logged in');
+    return this.socialService.declineChallenge(userId, id);
   }
 }

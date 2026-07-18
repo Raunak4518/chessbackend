@@ -19,7 +19,5 @@ export class MakeDailyMoveDto {
   @IsNotEmpty()
   to!: string;
 
-  @IsString()
-  @IsOptional()
-  userId?: string;
+
 }

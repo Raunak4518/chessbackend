@@ -144,7 +144,9 @@ export class DailyGamesService {
     }
 
     try {
-      const move = chess.move({ from, to, promotion: 'q' });
+      const moves = chess.moves({ verbose: true });
+      const isPromotion = moves.some(m => m.from === from && m.to === to && m.promotion);
+      const move = chess.move({ from, to, promotion: isPromotion ? 'q' : undefined });
       if (!move) throw new BadRequestException('Illegal move');
     } catch {
       throw new BadRequestException('Illegal move');

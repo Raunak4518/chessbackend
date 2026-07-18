@@ -19,7 +19,7 @@ export class SocialGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  private userSockets = new Map<string, string>(); // userId -> socketId
+  private userSockets = new Map<string, string>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -44,11 +44,10 @@ export class SocialGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         if (session && session.expiresAt > new Date()) {
           this.userSockets.set(session.user.id, client.id);
-          // Broadcast that this user is online
           this.server.emit('userOnline', { userId: session.user.id });
         }
       } catch {
-        // ignore errors resolving session
+
       }
     }
   }

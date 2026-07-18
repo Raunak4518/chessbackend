@@ -97,4 +97,39 @@ export class QuestsService {
 
     return updated;
   }
+
+  async claimQuestReward(userId: string, questId: string) {
+    const quest = await this.prisma.userQuest.findFirst({
+      where: {
+        id: questId,
+        userId,
+      },
+    });
+
+    if (!quest) throw new Error('Quest not found');
+    if (!quest.completed) throw new Error('Quest not completed');
+    if (quest.rewardClaimed) throw new Error('Reward already claimed');
+
+    // Grant 100 gold and 10 aetherium for completing a quest
+    await this.prisma.$transaction([
+      this.prisma.userQuest.update({
+        where: { id: quest.id },
+        data: { rewardClaimed: true },
+      }),
+      this.prisma.playerInventory.upsert({
+        where: { userId },
+        create: {
+          userId,
+          gold: 100,
+          aetherium: 10,
+        },
+        update: {
+          gold: { increment: 100 },
+          aetherium: { increment: 10 },
+        },
+      }),
+    ]);
+
+    return { success: true, reward: { gold: 100, aetherium: 10 } };
+  }
 }

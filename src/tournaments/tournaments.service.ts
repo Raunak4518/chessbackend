@@ -86,7 +86,7 @@ export class TournamentsService {
     if (!tournament || tournament.status !== TournamentStatus.IN_PROGRESS)
       return;
 
-    // Helper to calculate score and streak
+
     const updatePlayer = async (
       userId: string,
       isWinner: boolean,
@@ -101,7 +101,7 @@ export class TournamentsService {
       let newStreak = isWinner ? player.streak + 1 : 0;
 
       if (isWinner) {
-        scoreDelta = newStreak >= 3 ? 4 : 2; // Streak bonus
+        scoreDelta = newStreak >= 3 ? 4 : 2;
       } else if (isDraw) {
         scoreDelta = 1;
         newStreak = 0;
@@ -132,7 +132,7 @@ export class TournamentsService {
   async handleTournamentStatus() {
     const now = new Date();
 
-    // Start tournaments
+
     const upcoming = await this.prisma.tournament.findMany({
       where: { status: TournamentStatus.UPCOMING, startTime: { lte: now } },
     });
@@ -144,7 +144,7 @@ export class TournamentsService {
       this.logger.log(`Tournament started: ${t.id}`);
     }
 
-    // End Arena tournaments
+
     const inProgress = await this.prisma.tournament.findMany({
       where: {
         status: TournamentStatus.IN_PROGRESS,
@@ -159,7 +159,7 @@ export class TournamentsService {
       });
       this.logger.log(`Tournament ended: ${t.id}`);
 
-      // Calculate final ranks
+
       const players = await this.prisma.tournamentPlayer.findMany({
         where: { tournamentId: t.id },
         orderBy: { score: 'desc' },

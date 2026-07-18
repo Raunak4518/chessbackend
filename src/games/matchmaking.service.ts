@@ -7,6 +7,7 @@ export interface QueueItem {
   gameType: string;
   joinedAt: number;
   tournamentId?: string;
+  targetHexId?: string;
 }
 
 export interface MatchResult {
@@ -16,6 +17,7 @@ export interface MatchResult {
   timeControl: string;
   gameType: string;
   tournamentId?: string;
+  targetHexId?: string;
 }
 
 @Injectable()
@@ -46,6 +48,7 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
     timeControl: string,
     gameType: string,
     tournamentId?: string,
+    targetHexId?: string,
   ) {
     this.leaveQueue(socketId);
     this.queue.push({
@@ -55,6 +58,7 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
       gameType,
       joinedAt: Date.now(),
       tournamentId,
+      targetHexId,
     });
   }
 
@@ -84,6 +88,9 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
         // Must be in the same tournament (or both outside)
         if (playerA.tournamentId !== playerB.tournamentId) continue;
 
+        // Must be sieging the same hex (or both playing normal chess)
+        if (playerA.targetHexId !== playerB.targetHexId) continue;
+
         if (this.areCompatible(playerA, playerB)) {
           matchedIndices.add(i);
           matchedIndices.add(j);
@@ -98,6 +105,7 @@ export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
             timeControl: playerA.timeControl,
             gameType: playerA.gameType,
             tournamentId: playerA.tournamentId,
+            targetHexId: playerA.targetHexId,
           };
 
           if (this.matchCallback) {

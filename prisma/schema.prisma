@@ -25,6 +25,15 @@ enum TournamentStatus {
   COMPLETED
 }
 
+enum HexTerrain {
+  PLAINS
+  FOREST
+  MOUNTAIN
+  SWAMP
+  VOLCANO
+  CITADEL
+}
+
 enum GameWinner {
   WHITE
   BLACK
@@ -104,6 +113,13 @@ model User {
   faction            Faction?  @relation(fields: [factionId], references: [id])
   
   isFlaggedForCheating Boolean @default(false)
+
+  // Payments & Subscription
+  isPremium            Boolean @default(false)
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+
+  inventory          PlayerInventory?
 }
 
 model Session {
@@ -359,8 +375,9 @@ model UserQuest {
   questId     String   // e.g. "WIN_3_RAPID", "SOLVE_5_PUZZLES"
   progress    Int      @default(0)
   target      Int      
-  completed   Boolean  @default(false)
-  expiresAt   DateTime // Defines when the daily quest resets
+  completed     Boolean  @default(false)
+  rewardClaimed Boolean  @default(false)
+  expiresAt     DateTime // Defines when the daily quest resets
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -378,6 +395,46 @@ model Faction {
   updatedAt   DateTime @updatedAt
 
   users       User[]
+  hexes       WorldHex[]
+}
+
+model WorldHex {
+  id              String   @id @default(cuid())
+  q               Int      // Hex axial coordinate Q
+  r               Int      // Hex axial coordinate R
+  s               Int      // Hex axial coordinate S (q + r + s = 0)
+  terrain         HexTerrain @default(PLAINS)
+  controllingFactionId String?
+  controllingFaction   Faction? @relation(fields: [controllingFactionId], references: [id])
+  
+  structures      Structure[]
+  
+  @@unique([q, r])
+}
+
+model Structure {
+  id          String   @id @default(cuid())
+  type        String   // e.g. "CLOCKTOWER", "BARRICADE"
+  hexId       String
+  hex         WorldHex @relation(fields: [hexId], references: [id], onDelete: Cascade)
+}
+
+model PlayerInventory {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gold      Int      @default(0)
+  aetherium Int      @default(0)
+  items     Item[]
+}
+
+model Item {
+  id          String   @id @default(cuid())
+  inventoryId String
+  inventory   PlayerInventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  name        String
+  type        String   // "COSMETIC", "CONSUMABLE"
+  rarity      String   @default("COMMON")
 }
 
 

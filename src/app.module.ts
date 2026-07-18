@@ -26,6 +26,9 @@ import { StreamerModule } from './streamer/streamer.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ObservabilityModule } from './observability/observability.module';
+import { PaymentsModule } from './payments/payments.module';
+import { OverworldModule } from './overworld/overworld.module';
+import { OpeningsModule } from './openings/openings.module';
 
 @Module({
   imports: [
@@ -76,6 +79,9 @@ import { ObservabilityModule } from './observability/observability.module';
     AntiCheatModule,
     StreamerModule,
     ObservabilityModule,
+    PaymentsModule,
+    OverworldModule,
+    OpeningsModule,
   ],
   controllers: [AppController],
   providers: [

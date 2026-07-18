@@ -34,7 +34,7 @@ export class AnalysisController {
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
   ) {
-    const userId = req.user?.id || (req.query?.userId as string);
+    const userId = req.user?.id;
     if (!userId) throw new UnauthorizedException('Not logged in');
     return this.analysisService.analyzeGame(id);
   }
